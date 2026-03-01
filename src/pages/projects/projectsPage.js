@@ -1,7 +1,8 @@
 import { listCustomers } from '../../services/customersService';
 import { deleteProject, getProjectTaskStats, getStageCountByProject, listProjects, upsertProject } from '../../services/projectsService';
-import { getTasksUrlForProject } from '../../router';
+import { getProjectUsersUrlForProject, getTasksUrlForProject } from '../../router';
 import { deleteEntityAttachment, listEntityAttachments, uploadEntityAttachment } from '../../services/attachmentsService';
+import { addProjectMember, listAllUsers, listProjectMembers, removeProjectMember } from '../../services/projectMembersService';
 
 export async function renderProjectsPage(container, { showToast, user }) {
   const url = new URL(window.location.href);
@@ -11,6 +12,8 @@ export async function renderProjectsPage(container, { showToast, user }) {
   const isAddRoute = pathname === '/project/add';
   const editMatch = pathname.match(/^\/project\/([^/]+)\/edit\/?$/);
   const editProjectId = editMatch ? decodeURIComponent(editMatch[1]) : '';
+  const usersMatch = pathname.match(/^\/projects\/([^/]+)\/users\/?$/);
+  const usersProjectId = usersMatch ? decodeURIComponent(usersMatch[1]) : '';
 
   container.innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -38,7 +41,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
               <th>Stages</th>
               <th>Open Tasks</th>
               <th>Tasks Done</th>
-              <th style="width: 210px;">Actions</th>
+              <th style="width: 300px;">Actions</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -77,6 +80,87 @@ export async function renderProjectsPage(container, { showToast, user }) {
         </div>
       </div>
     </div>
+
+    <div class="modal fade" id="projectUsersModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="project-users-title">Project Users</h5>
+            <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+          </div>
+          <div class="modal-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div class="text-muted small" id="project-users-owner-note"></div>
+              <button class="btn btn-primary btn-sm" id="project-users-add-btn" type="button">Add User</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0" id="project-users-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Assigned At</th>
+                    <th style="width: 120px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="addProjectUserModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Add User to Project</h5>
+            <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Search users</label>
+              <input class="form-control" id="project-user-search" placeholder="Search by name, role, or user ID" />
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0" id="project-user-candidates-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th style="width: 120px;">Action</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="removeProjectUserModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Remove User</h5>
+            <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+          </div>
+          <div class="modal-body" id="remove-project-user-message"></div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-danger" type="button" id="confirm-remove-project-user-btn">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 
   const tableBody = container.querySelector('#projects-table tbody');
@@ -87,10 +171,26 @@ export async function renderProjectsPage(container, { showToast, user }) {
   const projectAttachmentHint = document.getElementById('project-attachment-hint');
   const projectAttachmentsList = document.getElementById('project-attachments-list');
   const projectModal = new window.bootstrap.Modal(document.getElementById('projectModal'));
+  const projectUsersModal = new window.bootstrap.Modal(document.getElementById('projectUsersModal'));
+  const addProjectUserModal = new window.bootstrap.Modal(document.getElementById('addProjectUserModal'));
+  const removeProjectUserModal = new window.bootstrap.Modal(document.getElementById('removeProjectUserModal'));
+
+  const projectUsersTitle = document.getElementById('project-users-title');
+  const projectUsersOwnerNote = document.getElementById('project-users-owner-note');
+  const projectUsersAddBtn = document.getElementById('project-users-add-btn');
+  const projectUsersTableBody = container.querySelector('#project-users-table tbody');
+  const userSearchInput = document.getElementById('project-user-search');
+  const userCandidatesTableBody = container.querySelector('#project-user-candidates-table tbody');
+  const removeProjectUserMessage = document.getElementById('remove-project-user-message');
+  const confirmRemoveProjectUserBtn = document.getElementById('confirm-remove-project-user-btn');
 
   let customers = [];
   let projects = [];
   let currentProjectId = '';
+  let currentUsersProject = null;
+  let currentProjectMembers = [];
+  let allUsers = [];
+  let selectedMemberForRemoval = null;
 
   async function initialize() {
     customers = await listCustomers();
@@ -127,9 +227,10 @@ export async function renderProjectsPage(container, { showToast, user }) {
             <td>${stats.open}</td>
             <td>${stats.completed}</td>
             <td class="text-nowrap">
-              <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${project.id}">Edit</button>
-              <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${project.id}">Delete</button>
+              ${project.owner_id === user.id ? `<button class="btn btn-sm btn-outline-primary edit-btn" data-id="${project.id}">Edit</button>` : ''}
+              ${project.owner_id === user.id ? `<button class="btn btn-sm btn-outline-danger delete-btn" data-id="${project.id}">Delete</button>` : ''}
               <a class="btn btn-sm btn-outline-secondary" href="${getTasksUrlForProject(project.id)}">Manage Tasks</a>
+              <a class="btn btn-sm btn-outline-secondary" href="${getProjectUsersUrlForProject(project.id)}">Users</a>
             </td>
           </tr>
         `;
@@ -160,6 +261,18 @@ export async function renderProjectsPage(container, { showToast, user }) {
         } catch (error) {
           showToast(error.message, 'danger');
         }
+      });
+    });
+
+    tableBody.querySelectorAll('a[href^="/projects/"][href$="/users"]').forEach((link) => {
+      link.addEventListener('click', async (event) => {
+        event.preventDefault();
+        const projectId = link.getAttribute('href').split('/')[2];
+        const project = projects.find((item) => item.id === projectId);
+        if (!project) {
+          return;
+        }
+        await openProjectUsersModal(project);
       });
     });
   }
@@ -218,6 +331,141 @@ export async function renderProjectsPage(container, { showToast, user }) {
       .join('');
   }
 
+  function isCurrentUserProjectOwner() {
+    return Boolean(currentUsersProject) && currentUsersProject.owner_id === user.id;
+  }
+
+  async function openProjectUsersModal(project) {
+    currentUsersProject = project;
+    selectedMemberForRemoval = null;
+    projectUsersTitle.textContent = `Project Users - ${project.title}`;
+
+    const isOwner = isCurrentUserProjectOwner();
+    projectUsersOwnerNote.textContent = isOwner
+      ? 'You can assign or remove sales representatives from this project.'
+      : 'Read-only view. Only the project owner can assign or remove users.';
+    projectUsersAddBtn.classList.toggle('d-none', !isOwner);
+
+    await loadProjectMembers();
+    if (!allUsers.length) {
+      allUsers = await listAllUsers();
+    }
+
+    userSearchInput.value = '';
+    renderUserCandidates();
+    projectUsersModal.show();
+    window.history.pushState({}, '', getProjectUsersUrlForProject(project.id));
+  }
+
+  async function loadProjectMembers() {
+    if (!currentUsersProject) {
+      projectUsersTableBody.innerHTML = '';
+      return;
+    }
+
+    currentProjectMembers = await listProjectMembers(currentUsersProject.id);
+    renderProjectMembers();
+  }
+
+  function renderProjectMembers() {
+    const isOwner = isCurrentUserProjectOwner();
+    if (!currentProjectMembers.length) {
+      projectUsersTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No users assigned.</td></tr>';
+      return;
+    }
+
+    projectUsersTableBody.innerHTML = currentProjectMembers
+      .map((member) => {
+        const profile = member.profiles || {};
+        return `
+          <tr>
+            <td>
+              <div>${escapeHtml(profile.full_name || 'Unknown user')}</div>
+              <div class="small text-muted">${member.user_id}</div>
+            </td>
+            <td>${profile.role || 'sales_rep'}</td>
+            <td>${new Date(member.created_at).toLocaleString()}</td>
+            <td>
+              ${
+                isOwner
+                  ? `<button class="btn btn-sm btn-outline-danger remove-project-user-btn" data-user-id="${member.user_id}">Remove</button>`
+                  : ''
+              }
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    projectUsersTableBody.querySelectorAll('.remove-project-user-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const foundMember = currentProjectMembers.find((member) => member.user_id === button.dataset.userId);
+        const userName = foundMember?.profiles?.full_name || button.dataset.userId;
+        selectedMemberForRemoval = {
+          userId: button.dataset.userId,
+          userName
+        };
+        removeProjectUserMessage.textContent = `Remove ${userName} from this project?`;
+        removeProjectUserModal.show();
+      });
+    });
+  }
+
+  function renderUserCandidates() {
+    const searchTerm = userSearchInput.value.trim().toLowerCase();
+    const memberIds = new Set(currentProjectMembers.map((member) => member.user_id));
+    const isOwner = isCurrentUserProjectOwner();
+
+    const filtered = allUsers.filter((profile) => {
+      const haystack = `${profile.full_name || ''} ${profile.role || ''} ${profile.id}`.toLowerCase();
+      return haystack.includes(searchTerm);
+    });
+
+    if (!filtered.length) {
+      userCandidatesTableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">No users found.</td></tr>';
+      return;
+    }
+
+    userCandidatesTableBody.innerHTML = filtered
+      .map((profile) => {
+        const alreadyAssigned = memberIds.has(profile.id);
+        return `
+          <tr>
+            <td>
+              <div>${escapeHtml(profile.full_name || 'Unknown user')}</div>
+              <div class="small text-muted">${profile.id}</div>
+            </td>
+            <td>${profile.role || 'sales_rep'}</td>
+            <td>
+              <button
+                class="btn btn-sm ${alreadyAssigned ? 'btn-outline-secondary' : 'btn-outline-primary'} add-project-user-btn"
+                data-user-id="${profile.id}"
+                ${alreadyAssigned || !isOwner ? 'disabled' : ''}
+              >${alreadyAssigned ? 'Assigned' : 'Add'}</button>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    userCandidatesTableBody.querySelectorAll('.add-project-user-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        if (!currentUsersProject) {
+          return;
+        }
+
+        try {
+          await addProjectMember(currentUsersProject.id, button.dataset.userId);
+          showToast('User assigned to project');
+          await loadProjectMembers();
+          renderUserCandidates();
+        } catch (error) {
+          showToast(error.message, 'danger');
+        }
+      });
+    });
+  }
+
   async function loadProjectAttachments() {
     syncProjectAttachmentState();
     if (!currentProjectId) {
@@ -244,6 +492,49 @@ export async function renderProjectsPage(container, { showToast, user }) {
     if (currentPath === '/project/add' || /^\/project\/[^/]+\/edit\/?$/.test(currentPath)) {
       const basePath = selectedCustomerId ? `/customer/${selectedCustomerId}/projects` : '/projects';
       window.history.replaceState({}, '', basePath);
+    }
+  });
+
+  document.getElementById('projectUsersModal').addEventListener('hidden.bs.modal', () => {
+    currentUsersProject = null;
+    currentProjectMembers = [];
+    selectedMemberForRemoval = null;
+    projectUsersTableBody.innerHTML = '';
+    userCandidatesTableBody.innerHTML = '';
+
+    const currentPath = window.location.pathname;
+    if (/^\/projects\/[^/]+\/users\/?$/.test(currentPath)) {
+      const basePath = selectedCustomerId ? `/customer/${selectedCustomerId}/projects` : '/projects';
+      window.history.replaceState({}, '', basePath);
+    }
+  });
+
+  projectUsersAddBtn.addEventListener('click', () => {
+    if (!isCurrentUserProjectOwner()) {
+      return;
+    }
+    userSearchInput.value = '';
+    renderUserCandidates();
+    addProjectUserModal.show();
+  });
+
+  userSearchInput.addEventListener('input', () => {
+    renderUserCandidates();
+  });
+
+  confirmRemoveProjectUserBtn.addEventListener('click', async () => {
+    if (!currentUsersProject || !selectedMemberForRemoval) {
+      return;
+    }
+
+    try {
+      await removeProjectMember(currentUsersProject.id, selectedMemberForRemoval.userId);
+      removeProjectUserModal.hide();
+      showToast('User removed from project');
+      await loadProjectMembers();
+      renderUserCandidates();
+    } catch (error) {
+      showToast(error.message, 'danger');
     }
   });
 
@@ -334,6 +625,13 @@ export async function renderProjectsPage(container, { showToast, user }) {
       if (project) {
         openProjectModal(project);
         loadProjectAttachments();
+      }
+    }
+
+    if (usersProjectId) {
+      const project = projects.find((item) => item.id === usersProjectId);
+      if (project) {
+        await openProjectUsersModal(project);
       }
     }
   } catch (error) {

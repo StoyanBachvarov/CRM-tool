@@ -30,6 +30,11 @@ function rewritePrettyUrl(urlValue) {
     return `/tasks.html?projectId=${projectId}${url.search ? `&${url.search.slice(1)}` : ''}`;
   }
 
+  const projectUsersMatch = pathname.match(/^\/projects\/([^/]+)\/users\/?$/);
+  if (projectUsersMatch) {
+    return `/projects.html${url.search}`;
+  }
+
   const projectTasksSingularMatch = pathname.match(/^\/project\/([^/]+)\/tasks\/?$/);
   if (projectTasksSingularMatch) {
     const projectId = encodeURIComponent(decodeURIComponent(projectTasksSingularMatch[1]));

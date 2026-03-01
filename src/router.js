@@ -58,6 +58,16 @@ export function getProjectIdFromUrl() {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+export function getProjectUsersIdFromUrl() {
+  const url = new URL(window.location.href);
+  const match = url.pathname.match(/^\/projects\/([^/]+)\/users\/?$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 export function getTasksUrlForProject(projectId) {
   return `/project/${encodeURIComponent(projectId)}/tasks`;
+}
+
+export function getProjectUsersUrlForProject(projectId) {
+  return `/projects/${encodeURIComponent(projectId)}/users`;
 }
