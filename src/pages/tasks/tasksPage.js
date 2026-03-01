@@ -119,8 +119,8 @@ export async function renderTasksPage(container, { showToast }) {
                 <div class="kanban-task-list" data-stage-id="${stage.id}">
                   ${stageTasks.map(renderTaskCard).join('')}
                 </div>
-                <button class="btn btn-outline-primary add-task-btn" data-stage-id="${stage.id}">
-                  <i class="bi bi-plus-lg me-1"></i>Add New Task
+                <button class="btn btn-outline-primary btn-lg add-task-btn" data-stage-id="${stage.id}">
+                  <i class="bi bi-plus-lg me-2 fs-5"></i>Add New Task
                 </button>
               </section>
             `;
