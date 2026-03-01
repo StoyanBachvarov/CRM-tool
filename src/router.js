@@ -9,6 +9,7 @@ const PAGE_TITLES = {
   visits: 'CRM Tool | Visits',
   projects: 'CRM Tool | Projects',
   tasks: 'CRM Tool | Tasks',
+  'task-labels': 'CRM Tool | Task Labels',
   admin: 'CRM Tool | Admin'
 };
 

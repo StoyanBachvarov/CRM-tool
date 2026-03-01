@@ -1,5 +1,5 @@
 import { listCustomers } from '../../services/customersService';
-import { deleteProject, getProjectTaskStats, getStageCountByProject, listProjects, upsertProject } from '../../services/projectsService';
+import { deleteProject, getProjectById, getProjectTaskStats, getStageCountByProject, listProjectsPaged, upsertProject } from '../../services/projectsService';
 import { getProjectUsersUrlForProject, getTasksUrlForProject } from '../../router';
 import { deleteEntityAttachment, listEntityAttachments, uploadEntityAttachment } from '../../services/attachmentsService';
 import { addProjectMember, listAllUsers, listProjectMembers, removeProjectMember } from '../../services/projectMembersService';
@@ -46,6 +46,13 @@ export async function renderProjectsPage(container, { showToast, user }) {
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+      <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="small text-muted" id="projects-page-info"></div>
+        <div class="btn-group">
+          <button class="btn btn-outline-secondary btn-sm" id="projects-prev-page" type="button">Previous</button>
+          <button class="btn btn-outline-secondary btn-sm" id="projects-next-page" type="button">Next</button>
+        </div>
       </div>
     </div>
 
@@ -186,6 +193,9 @@ export async function renderProjectsPage(container, { showToast, user }) {
 
   let customers = [];
   let projects = [];
+  let totalProjects = 0;
+  let currentPage = 1;
+  const pageSize = 20;
   let currentProjectId = '';
   let currentUsersProject = null;
   let currentProjectMembers = [];
@@ -206,7 +216,20 @@ export async function renderProjectsPage(container, { showToast, user }) {
   }
 
   async function loadProjects(customerId) {
-    projects = await listProjects(customerId || undefined);
+    const pageResult = await listProjectsPaged({
+      customerId: customerId || undefined,
+      page: currentPage,
+      pageSize
+    });
+
+    projects = pageResult.items;
+    totalProjects = pageResult.total;
+    currentPage = pageResult.page;
+
+    const totalPages = pageResult.totalPages;
+    document.getElementById('projects-page-info').textContent = `Page ${currentPage} of ${totalPages} (${totalProjects} projects)`;
+    document.getElementById('projects-prev-page').disabled = currentPage <= 1;
+    document.getElementById('projects-next-page').disabled = currentPage >= totalPages;
 
     const projectIds = projects.map((project) => project.id);
     const [taskStats, stageCounts] = await Promise.all([
@@ -257,7 +280,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
         try {
           await deleteProject(button.dataset.id);
           showToast('Project deleted');
-          await loadProjects(customerFilter.value || undefined);
+          await loadProjects(customerFilter.value || selectedCustomerId || '');
         } catch (error) {
           showToast(error.message, 'danger');
         }
@@ -539,7 +562,25 @@ export async function renderProjectsPage(container, { showToast, user }) {
   });
 
   customerFilter.addEventListener('change', async () => {
-    await loadProjects(customerFilter.value || undefined);
+    currentPage = 1;
+    await loadProjects(customerFilter.value || selectedCustomerId || '');
+  });
+
+  document.getElementById('projects-prev-page').addEventListener('click', async () => {
+    if (currentPage <= 1) {
+      return;
+    }
+    currentPage -= 1;
+    await loadProjects(customerFilter.value || selectedCustomerId || '');
+  });
+
+  document.getElementById('projects-next-page').addEventListener('click', async () => {
+    const totalPages = Math.max(1, Math.ceil(totalProjects / pageSize));
+    if (currentPage >= totalPages) {
+      return;
+    }
+    currentPage += 1;
+    await loadProjects(customerFilter.value || selectedCustomerId || '');
   });
 
   form.addEventListener('submit', async (event) => {
@@ -558,7 +599,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
       }
       projectModal.hide();
       showToast(payload.id ? 'Project updated' : 'Project created');
-      await loadProjects(customerFilter.value || undefined);
+      await loadProjects(customerFilter.value || selectedCustomerId || '');
     } catch (error) {
       showToast(error.message, 'danger');
     }
@@ -621,7 +662,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
     }
 
     if (editProjectId) {
-      const project = projects.find((item) => item.id === editProjectId);
+      const project = projects.find((item) => item.id === editProjectId) || (await getProjectById(editProjectId));
       if (project) {
         openProjectModal(project);
         loadProjectAttachments();
@@ -629,7 +670,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
     }
 
     if (usersProjectId) {
-      const project = projects.find((item) => item.id === usersProjectId);
+      const project = projects.find((item) => item.id === usersProjectId) || (await getProjectById(usersProjectId));
       if (project) {
         await openProjectUsersModal(project);
       }

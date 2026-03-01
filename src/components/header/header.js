@@ -4,7 +4,8 @@ const protectedLinks = [
   { href: '/sales-reps', label: 'Sales Reps', page: 'sales-reps' },
   { href: '/visits', label: 'Visits', page: 'visits' },
   { href: '/projects', label: 'Projects', page: 'projects' },
-  { href: '/tasks', label: 'Tasks', page: 'tasks' }
+  { href: '/tasks', label: 'Tasks', page: 'tasks' },
+  { href: '/task-labels', label: 'Task Labels', page: 'task-labels' }
 ];
 
 export function renderHeader({ user, pageId }) {

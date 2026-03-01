@@ -17,7 +17,7 @@ export async function listProjectStages(projectId) {
 export async function listTasksByProject(projectId) {
   const { data, error } = await supabase
     .from('tasks')
-    .select('id, project_id, stage_id, title, description, assigned_sales_rep_id, status, position, created_at, profiles(full_name)')
+    .select('id, project_id, stage_id, title, description, assigned_sales_rep_id, status, position, created_at, profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
     .eq('project_id', projectId)
     .order('position', { ascending: true });
 
@@ -34,13 +34,15 @@ export async function upsertTask(payload) {
     if (error) {
       throw error;
     }
-    return;
+    return payload.id;
   }
 
-  const { error } = await supabase.from('tasks').insert(payload);
+  const { data, error } = await supabase.from('tasks').insert(payload).select('id').single();
   if (error) {
     throw error;
   }
+
+  return data.id;
 }
 
 export async function deleteTask(id) {
@@ -100,4 +102,100 @@ export async function getDashboardCounts() {
     completedTasks,
     upcomingVisits
   };
+}
+
+export async function listTaskComments(taskId) {
+  const { data, error } = await supabase
+    .from('task_comments')
+    .select('id, task_id, author_id, message, created_at, profiles(full_name)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function addTaskComment(taskId, authorId, message) {
+  const { error } = await supabase.from('task_comments').insert({
+    task_id: taskId,
+    author_id: authorId,
+    message
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function listTaskLabels() {
+  const { data, error } = await supabase
+    .from('task_labels')
+    .select('id, name, color')
+    .order('name', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function listLabelsForTask(taskId) {
+  const { data, error } = await supabase
+    .from('task_label_assignments')
+    .select('label_id')
+    .eq('task_id', taskId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data.map((row) => row.label_id);
+}
+
+export async function replaceTaskLabels(taskId, labelIds) {
+  const { error: deleteError } = await supabase
+    .from('task_label_assignments')
+    .delete()
+    .eq('task_id', taskId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (!labelIds.length) {
+    return;
+  }
+
+  const rows = labelIds.map((labelId) => ({
+    task_id: taskId,
+    label_id: labelId
+  }));
+
+  const { error: insertError } = await supabase.from('task_label_assignments').insert(rows);
+  if (insertError) {
+    throw insertError;
+  }
+}
+
+export async function listTasksByLabel(labelId) {
+  const { data, error } = labelId
+    ? await supabase
+        .from('tasks')
+        .select('id, title, description, status, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments!inner(label_id, task_labels(id, name, color))')
+        .eq('task_label_assignments.label_id', labelId)
+        .order('created_at', { ascending: false })
+    : await supabase
+        .from('tasks')
+        .select('id, title, description, status, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
+        .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }

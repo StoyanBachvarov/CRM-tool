@@ -18,6 +18,36 @@ export async function listProjects(customerId) {
   return data;
 }
 
+export async function listProjectsPaged({ customerId, page = 1, pageSize = 20 } = {}) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safePageSize = Math.max(1, Number(pageSize) || 20);
+  const from = (safePage - 1) * safePageSize;
+  const to = from + safePageSize - 1;
+
+  let query = supabase
+    .from('customer_projects')
+    .select('id, customer_id, title, description, owner_id, created_at, customers(name)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (customerId) {
+    query = query.eq('customer_id', customerId);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return {
+    items: data || [],
+    total: count || 0,
+    page: safePage,
+    pageSize: safePageSize,
+    totalPages: Math.max(1, Math.ceil((count || 0) / safePageSize))
+  };
+}
+
 export async function upsertProject(payload) {
   if (payload.id) {
     const { error } = await supabase.from('customer_projects').update(payload).eq('id', payload.id);
@@ -33,6 +63,20 @@ export async function upsertProject(payload) {
   }
 
   await createDefaultStages(data.id);
+}
+
+export async function getProjectById(projectId) {
+  const { data, error } = await supabase
+    .from('customer_projects')
+    .select('id, customer_id, title, description, owner_id, created_at, customers(name)')
+    .eq('id', projectId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 export async function deleteProject(id) {
