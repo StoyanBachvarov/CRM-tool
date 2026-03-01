@@ -1,6 +1,11 @@
 import { deleteCustomer, getCustomerStats, listCustomers, upsertCustomer } from '../../services/customersService';
 
 export async function renderCustomersPage(container, { showToast, user }) {
+  const pathname = window.location.pathname;
+  const isAddRoute = pathname === '/customer/add';
+  const editMatch = pathname.match(/^\/customer\/([^/]+)\/edit\/?$/);
+  const editCustomerId = editMatch ? decodeURIComponent(editMatch[1]) : '';
+
   container.innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h2 class="mb-0">Customers</h2>
@@ -74,7 +79,7 @@ export async function renderCustomersPage(container, { showToast, user }) {
           <td class="text-nowrap">
             <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${customer.id}">Edit</button>
             <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${customer.id}">Delete</button>
-            <a class="btn btn-sm btn-outline-secondary" href="/projects?customerId=${customer.id}">View Projects</a>
+            <a class="btn btn-sm btn-outline-secondary" href="/customer/${customer.id}/projects">View Projects</a>
             <a class="btn btn-sm btn-outline-secondary" href="/visits?customerId=${customer.id}">View Visits</a>
           </td>
         </tr>
@@ -85,8 +90,8 @@ export async function renderCustomersPage(container, { showToast, user }) {
     tableBody.querySelectorAll('.edit-btn').forEach((button) => {
       button.addEventListener('click', () => {
         const customer = customers.find((item) => item.id === button.dataset.id);
-        fillForm(customer);
-        customerModal.show();
+        openCustomerModal(customer);
+        window.history.pushState({}, '', `/customer/${button.dataset.id}/edit`);
       });
     });
 
@@ -107,9 +112,8 @@ export async function renderCustomersPage(container, { showToast, user }) {
   }
 
   document.getElementById('add-customer-btn').addEventListener('click', () => {
-    form.reset();
-    form.elements.id.value = '';
-    customerModal.show();
+    openCustomerModal();
+    window.history.pushState({}, '', '/customer/add');
   });
 
   form.addEventListener('submit', async (event) => {
@@ -140,8 +144,36 @@ export async function renderCustomersPage(container, { showToast, user }) {
     });
   }
 
+  function openCustomerModal(customer) {
+    form.reset();
+    form.elements.id.value = '';
+    if (customer) {
+      fillForm(customer);
+    }
+    customerModal.show();
+  }
+
+  modalElement.addEventListener('hidden.bs.modal', () => {
+    const currentPath = window.location.pathname;
+    if (currentPath === '/customer/add' || /^\/customer\/[^/]+\/edit\/?$/.test(currentPath)) {
+      window.history.replaceState({}, '', '/customers');
+    }
+  });
+
   try {
     await loadData();
+
+    if (isAddRoute) {
+      openCustomerModal();
+    }
+
+    if (editCustomerId) {
+      const customers = await listCustomers();
+      const customer = customers.find((item) => item.id === editCustomerId);
+      if (customer) {
+        openCustomerModal(customer);
+      }
+    }
   } catch (error) {
     showToast(error.message, 'danger');
   }

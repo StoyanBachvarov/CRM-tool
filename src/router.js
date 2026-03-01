@@ -54,10 +54,10 @@ export function getProjectIdFromUrl() {
     return fromQuery;
   }
 
-  const match = url.pathname.match(/^\/projects\/([^/]+)\/tasks\/?$/);
+  const match = url.pathname.match(/^\/(?:project|projects)\/([^/]+)\/tasks\/?$/);
   return match ? decodeURIComponent(match[1]) : '';
 }
 
 export function getTasksUrlForProject(projectId) {
-  return `/projects/${encodeURIComponent(projectId)}/tasks`;
+  return `/project/${encodeURIComponent(projectId)}/tasks`;
 }

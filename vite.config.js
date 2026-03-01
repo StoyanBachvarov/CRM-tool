@@ -30,6 +30,34 @@ function rewritePrettyUrl(urlValue) {
     return `/tasks.html?projectId=${projectId}${url.search ? `&${url.search.slice(1)}` : ''}`;
   }
 
+  const projectTasksSingularMatch = pathname.match(/^\/project\/([^/]+)\/tasks\/?$/);
+  if (projectTasksSingularMatch) {
+    const projectId = encodeURIComponent(decodeURIComponent(projectTasksSingularMatch[1]));
+    return `/tasks.html?projectId=${projectId}${url.search ? `&${url.search.slice(1)}` : ''}`;
+  }
+
+  const customerProjectsMatch = pathname.match(/^\/customer\/([^/]+)\/projects\/?$/);
+  if (customerProjectsMatch) {
+    const customerId = encodeURIComponent(decodeURIComponent(customerProjectsMatch[1]));
+    return `/projects.html?customerId=${customerId}${url.search ? `&${url.search.slice(1)}` : ''}`;
+  }
+
+  if (pathname === '/customer/add') {
+    return `/customers.html${url.search}`;
+  }
+
+  if (/^\/customer\/[^/]+\/edit\/?$/.test(pathname)) {
+    return `/customers.html${url.search}`;
+  }
+
+  if (pathname === '/project/add') {
+    return `/projects.html${url.search}`;
+  }
+
+  if (/^\/project\/[^/]+\/edit\/?$/.test(pathname)) {
+    return `/projects.html${url.search}`;
+  }
+
   return urlValue;
 }
 

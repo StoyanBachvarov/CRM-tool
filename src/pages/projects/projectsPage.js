@@ -4,7 +4,12 @@ import { getTasksUrlForProject } from '../../router';
 
 export async function renderProjectsPage(container, { showToast, user }) {
   const url = new URL(window.location.href);
-  const selectedCustomerId = url.searchParams.get('customerId') || '';
+  const pathname = window.location.pathname;
+  const customerProjectsMatch = pathname.match(/^\/customer\/([^/]+)\/projects\/?$/);
+  const selectedCustomerId = customerProjectsMatch ? decodeURIComponent(customerProjectsMatch[1]) : url.searchParams.get('customerId') || '';
+  const isAddRoute = pathname === '/project/add';
+  const editMatch = pathname.match(/^\/project\/([^/]+)\/edit\/?$/);
+  const editProjectId = editMatch ? decodeURIComponent(editMatch[1]) : '';
 
   container.innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -123,8 +128,8 @@ export async function renderProjectsPage(container, { showToast, user }) {
     tableBody.querySelectorAll('.edit-btn').forEach((button) => {
       button.addEventListener('click', () => {
         const project = projects.find((item) => item.id === button.dataset.id);
-        fillForm(project);
-        projectModal.show();
+        openProjectModal(project);
+        window.history.pushState({}, '', `/project/${button.dataset.id}/edit`);
       });
     });
 
@@ -150,13 +155,29 @@ export async function renderProjectsPage(container, { showToast, user }) {
     form.elements.description.value = project.description || '';
   }
 
-  document.getElementById('add-project-btn').addEventListener('click', () => {
+  function openProjectModal(project) {
     form.reset();
     form.elements.id.value = '';
     if (customerFilter.value) {
       form.elements.customer_id.value = customerFilter.value;
     }
+    if (project) {
+      fillForm(project);
+    }
     projectModal.show();
+  }
+
+  document.getElementById('add-project-btn').addEventListener('click', () => {
+    openProjectModal();
+    window.history.pushState({}, '', '/project/add');
+  });
+
+  document.getElementById('projectModal').addEventListener('hidden.bs.modal', () => {
+    const currentPath = window.location.pathname;
+    if (currentPath === '/project/add' || /^\/project\/[^/]+\/edit\/?$/.test(currentPath)) {
+      const basePath = selectedCustomerId ? `/customer/${selectedCustomerId}/projects` : '/projects';
+      window.history.replaceState({}, '', basePath);
+    }
   });
 
   customerFilter.addEventListener('change', async () => {
@@ -184,6 +205,17 @@ export async function renderProjectsPage(container, { showToast, user }) {
 
   try {
     await initialize();
+
+    if (isAddRoute) {
+      openProjectModal();
+    }
+
+    if (editProjectId) {
+      const project = projects.find((item) => item.id === editProjectId);
+      if (project) {
+        openProjectModal(project);
+      }
+    }
   } catch (error) {
     showToast(error.message, 'danger');
   }

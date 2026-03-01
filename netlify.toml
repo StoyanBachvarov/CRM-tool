@@ -18,6 +18,21 @@
   status = 200
 
 [[redirects]]
+  from = "/customer/add"
+  to = "/customers.html"
+  status = 200
+
+[[redirects]]
+  from = "/customer/:id/edit"
+  to = "/customers.html"
+  status = 200
+
+[[redirects]]
+  from = "/customer/:id/projects"
+  to = "/projects.html?customerId=:id"
+  status = 200
+
+[[redirects]]
   from = "/sales-reps"
   to = "/sales-reps.html"
   status = 200
@@ -33,7 +48,22 @@
   status = 200
 
 [[redirects]]
+  from = "/project/add"
+  to = "/projects.html"
+  status = 200
+
+[[redirects]]
+  from = "/project/:id/edit"
+  to = "/projects.html"
+  status = 200
+
+[[redirects]]
   from = "/projects/:projectId/tasks"
+  to = "/tasks.html?projectId=:projectId"
+  status = 200
+
+[[redirects]]
+  from = "/project/:projectId/tasks"
   to = "/tasks.html?projectId=:projectId"
   status = 200
 
