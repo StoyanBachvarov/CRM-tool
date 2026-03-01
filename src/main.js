@@ -43,6 +43,15 @@ const pageMap = {
   tasks: { render: renderTasksPage, protected: true }
 };
 
+function isReloadNavigation() {
+  const entries = window.performance?.getEntriesByType?.('navigation');
+  if (!entries?.length) {
+    return false;
+  }
+
+  return entries[0].type === 'reload';
+}
+
 async function bootstrap() {
   const pageDef = pageMap[pageId];
   if (!pageDef) {
@@ -50,6 +59,14 @@ async function bootstrap() {
   }
 
   setPageTitle(pageId);
+
+  if (isReloadNavigation()) {
+    try {
+      await signOut();
+    } catch {
+      // no-op
+    }
+  }
 
   let user = null;
   try {
