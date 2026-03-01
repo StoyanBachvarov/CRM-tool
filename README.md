@@ -43,9 +43,10 @@ For seeding with admin API:
 ## Seed Demo Data
 - `npm run seed`
 - Demo users:
-  - `steve@gmail.com / pass123`
-  - `maria@gmail.com / pass123`
-  - `peter@gmail.com / pass123`
+  - `stoyan@gmail.com / pass123`
+  - `ani@gmail.com / pass123`
+  - `stefi@gmail.com / pass123`
+  - `kati@gmail.com / pass123`
 
 ## Deployment (Netlify)
 1. Connect this GitHub repository in Netlify.
