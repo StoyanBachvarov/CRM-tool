@@ -1,4 +1,5 @@
 import Sortable from 'sortablejs';
+import { supabase } from '../../services/supabaseClient';
 import { listProjects } from '../../services/projectsService';
 import { listSalesReps } from '../../services/salesRepsService';
 import { deleteTask, listProjectStages, listTasksByProject, moveTask, upsertTask } from '../../services/tasksService';
@@ -80,6 +81,8 @@ export async function renderTasksPage(container, { showToast, user }) {
   let tasks = [];
   let salesReps = [];
   let currentTaskId = '';
+  let tasksChannel = null;
+  let realtimeRefreshTimer = null;
 
   async function initialize() {
     projects = await listProjects();
@@ -112,6 +115,51 @@ export async function renderTasksPage(container, { showToast, user }) {
     taskForm.elements.stage_id.innerHTML = stages.map((stage) => `<option value="${stage.id}">${stage.name}</option>`).join('');
 
     renderBoard();
+  }
+
+  function clearTasksRealtimeSubscription() {
+    if (tasksChannel && supabase) {
+      supabase.removeChannel(tasksChannel);
+    }
+    tasksChannel = null;
+    if (realtimeRefreshTimer) {
+      window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = null;
+    }
+  }
+
+  function subscribeToProjectTasks(projectId) {
+    clearTasksRealtimeSubscription();
+
+    if (!supabase || !projectId) {
+      return;
+    }
+
+    tasksChannel = supabase
+      .channel(`tasks-project-${projectId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+        filter: `project_id=eq.${projectId}`
+      }, async () => {
+        if (realtimeRefreshTimer) {
+          window.clearTimeout(realtimeRefreshTimer);
+        }
+
+        realtimeRefreshTimer = window.setTimeout(async () => {
+          if (projectSelect.value !== projectId) {
+            return;
+          }
+
+          try {
+            await loadBoard(projectId);
+          } catch {
+            // no-op
+          }
+        }, 200);
+      })
+      .subscribe();
   }
 
   function renderBoard() {
@@ -307,10 +355,12 @@ export async function renderTasksPage(container, { showToast, user }) {
 
   projectSelect.addEventListener('change', async () => {
     if (!projectSelect.value) {
+      clearTasksRealtimeSubscription();
       boardWrapper.innerHTML = '';
       return;
     }
     await loadBoard(projectSelect.value);
+    subscribeToProjectTasks(projectSelect.value);
   });
 
   taskForm.addEventListener('submit', async (event) => {
@@ -389,8 +439,15 @@ export async function renderTasksPage(container, { showToast, user }) {
     syncTaskAttachmentState();
   });
 
+  window.addEventListener('beforeunload', () => {
+    clearTasksRealtimeSubscription();
+  });
+
   try {
     await initialize();
+    if (projectSelect.value) {
+      subscribeToProjectTasks(projectSelect.value);
+    }
     syncTaskAttachmentState();
     renderTaskAttachments([]);
   } catch (error) {

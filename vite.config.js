@@ -17,7 +17,8 @@ function rewritePrettyUrl(urlValue) {
     '/sales-reps': '/sales-reps.html',
     '/visits': '/visits.html',
     '/projects': '/projects.html',
-    '/tasks': '/tasks.html'
+    '/tasks': '/tasks.html',
+    '/admin': '/admin.html'
   };
 
   if (staticMap[pathname]) {
@@ -112,7 +113,8 @@ export default defineConfig({
         salesReps: resolve(__dirname, 'sales-reps.html'),
         visits: resolve(__dirname, 'visits.html'),
         projects: resolve(__dirname, 'projects.html'),
-        tasks: resolve(__dirname, 'tasks.html')
+        tasks: resolve(__dirname, 'tasks.html'),
+        admin: resolve(__dirname, 'admin.html')
       }
     }
   }

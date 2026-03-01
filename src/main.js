@@ -10,6 +10,7 @@ if (!window.bootstrap) {
 import { renderLayout } from './components/layout/layout';
 import { showToast } from './components/common/toast';
 import { getCurrentUser, onAuthStateChange, signOut } from './services/authService';
+import { getProfileById } from './services/profilesService';
 import {
   navigateTo,
   redirectToDashboard,
@@ -28,6 +29,7 @@ import { renderSalesRepsPage } from './pages/sales-reps/salesRepsPage';
 import { renderVisitsPage } from './pages/visits/visitsPage';
 import { renderProjectsPage } from './pages/projects/projectsPage';
 import { renderTasksPage } from './pages/tasks/tasksPage';
+import { renderAdminPage } from './pages/admin/adminPage';
 
 const app = document.getElementById('app');
 const pageId = document.body.dataset.page;
@@ -40,7 +42,8 @@ const pageMap = {
   'sales-reps': { render: renderSalesRepsPage, protected: true },
   visits: { render: renderVisitsPage, protected: true },
   projects: { render: renderProjectsPage, protected: true },
-  tasks: { render: renderTasksPage, protected: true }
+  tasks: { render: renderTasksPage, protected: true },
+  admin: { render: renderAdminPage, protected: true }
 };
 
 function isReloadNavigation() {
@@ -71,6 +74,15 @@ async function bootstrap() {
   let user = null;
   try {
     user = await getCurrentUser();
+
+    if (user) {
+      const profile = await getProfileById(user.id);
+      user = {
+        ...user,
+        role: profile?.role || 'sales_rep',
+        full_name: profile?.full_name || user.user_metadata?.full_name || user.email
+      };
+    }
   } catch (error) {
     showToast(error.message, 'danger');
   }
@@ -81,6 +93,12 @@ async function bootstrap() {
   }
 
   if (shouldRedirectToDashboard(pageId, user)) {
+    redirectToDashboard();
+    return;
+  }
+
+  if (pageId === 'admin' && user?.role !== 'admin') {
+    showToast('Admin role required.', 'danger');
     redirectToDashboard();
     return;
   }

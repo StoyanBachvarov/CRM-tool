@@ -8,7 +8,8 @@ const PAGE_TITLES = {
   'sales-reps': 'CRM Tool | Sales Representatives',
   visits: 'CRM Tool | Visits',
   projects: 'CRM Tool | Projects',
-  tasks: 'CRM Tool | Tasks'
+  tasks: 'CRM Tool | Tasks',
+  admin: 'CRM Tool | Admin'
 };
 
 export function setPageTitle(pageId) {

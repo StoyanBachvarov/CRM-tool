@@ -8,8 +8,9 @@ const protectedLinks = [
 ];
 
 export function renderHeader({ user, pageId }) {
+  const links = user?.role === 'admin' ? [...protectedLinks, { href: '/admin', label: 'Admin', page: 'admin' }] : protectedLinks;
   const navLinks = user
-    ? protectedLinks
+    ? links
         .map(
           (link) => `
             <li class="nav-item">
