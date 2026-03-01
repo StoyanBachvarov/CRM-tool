@@ -30,7 +30,18 @@ export function showToast(message, variant = 'info') {
   `;
 
   container.appendChild(toast);
-  const bsToast = new window.bootstrap.Toast(toast, { delay: 2800 });
+
+  const BootstrapToast = window.bootstrap?.Toast;
+  if (!BootstrapToast) {
+    toast.classList.add('show');
+    toast.style.display = 'block';
+    window.setTimeout(() => {
+      toast.remove();
+    }, 2800);
+    return;
+  }
+
+  const bsToast = new BootstrapToast(toast, { delay: 2800 });
   bsToast.show();
 
   toast.addEventListener('hidden.bs.toast', () => {
