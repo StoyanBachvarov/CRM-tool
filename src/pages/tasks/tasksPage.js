@@ -2,10 +2,10 @@ import Sortable from 'sortablejs';
 import { listProjects } from '../../services/projectsService';
 import { listSalesReps } from '../../services/salesRepsService';
 import { deleteTask, listProjectStages, listTasksByProject, moveTask, upsertTask } from '../../services/tasksService';
+import { getProjectIdFromUrl } from '../../router';
 
 export async function renderTasksPage(container, { showToast }) {
-  const url = new URL(window.location.href);
-  const preselectedProjectId = url.searchParams.get('projectId') || '';
+  const preselectedProjectId = getProjectIdFromUrl();
 
   container.innerHTML = `
     <div class="d-flex justify-content-between align-items-center mb-3">

@@ -74,8 +74,8 @@ export async function renderCustomersPage(container, { showToast, user }) {
           <td class="text-nowrap">
             <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${customer.id}">Edit</button>
             <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${customer.id}">Delete</button>
-            <a class="btn btn-sm btn-outline-secondary" href="/projects.html?customerId=${customer.id}">View Projects</a>
-            <a class="btn btn-sm btn-outline-secondary" href="/visits.html?customerId=${customer.id}">View Visits</a>
+            <a class="btn btn-sm btn-outline-secondary" href="/projects?customerId=${customer.id}">View Projects</a>
+            <a class="btn btn-sm btn-outline-secondary" href="/visits?customerId=${customer.id}">View Visits</a>
           </td>
         </tr>
       `;

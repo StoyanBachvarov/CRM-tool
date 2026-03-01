@@ -7,7 +7,7 @@ export async function renderDashboardPage(container, { showToast }) {
     container.innerHTML = `
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0">Dashboard</h2>
-        <a href="/customers.html" class="btn btn-primary">Go to Customers</a>
+        <a href="/customers" class="btn btn-primary">Go to Customers</a>
       </div>
 
       <div class="row g-3">

@@ -1,5 +1,6 @@
 import { listCustomers } from '../../services/customersService';
 import { deleteProject, getProjectTaskStats, getStageCountByProject, listProjects, upsertProject } from '../../services/projectsService';
+import { getTasksUrlForProject } from '../../router';
 
 export async function renderProjectsPage(container, { showToast, user }) {
   const url = new URL(window.location.href);
@@ -108,7 +109,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
             <td class="text-nowrap">
               <button class="btn btn-sm btn-outline-primary edit-btn" data-id="${project.id}">Edit</button>
               <button class="btn btn-sm btn-outline-danger delete-btn" data-id="${project.id}">Delete</button>
-              <a class="btn btn-sm btn-outline-secondary" href="/tasks.html?projectId=${project.id}">Manage Tasks</a>
+              <a class="btn btn-sm btn-outline-secondary" href="${getTasksUrlForProject(project.id)}">Manage Tasks</a>
             </td>
           </tr>
         `;

@@ -7,7 +7,7 @@ export async function renderIndexPage(container) {
           <p class="lead text-muted mb-4">
             Manage customers, track visits, organize customer projects, and deliver tasks across your sales team.
           </p>
-          <a class="btn btn-primary btn-lg" href="/login.html">Register or Login</a>
+          <a class="btn btn-primary btn-lg" href="/login">Register or Login</a>
         </div>
         <div class="col-lg-4 mt-4 mt-lg-0">
           <div class="card border-0 bg-light">

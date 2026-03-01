@@ -32,17 +32,32 @@ export function navigateTo(url) {
 }
 
 export function redirectToLogin() {
-  navigateTo('/login.html');
+  navigateTo('/login');
 }
 
 export function redirectToDashboard() {
-  navigateTo('/dashboard.html');
+  navigateTo('/dashboard');
 }
 
 export function redirectToIndex() {
-  navigateTo('/index.html');
+  navigateTo('/');
 }
 
 export function getQueryParam(name) {
   return new URL(window.location.href).searchParams.get(name);
+}
+
+export function getProjectIdFromUrl() {
+  const url = new URL(window.location.href);
+  const fromQuery = url.searchParams.get('projectId');
+  if (fromQuery) {
+    return fromQuery;
+  }
+
+  const match = url.pathname.match(/^\/projects\/([^/]+)\/tasks\/?$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+export function getTasksUrlForProject(projectId) {
+  return `/projects/${encodeURIComponent(projectId)}/tasks`;
 }

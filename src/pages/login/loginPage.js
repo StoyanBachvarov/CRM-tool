@@ -44,7 +44,7 @@ export async function renderLoginPage(container, { showToast, navigate }) {
 
     try {
       await signIn(formData.get('email'), formData.get('password'));
-      navigate('/dashboard.html');
+      navigate('/dashboard');
     } catch (error) {
       showToast(error.message, 'danger');
     }
