@@ -18,16 +18,20 @@ export async function renderLoginPage(container, { showToast, navigate }) {
           <div class="card-body tab-content">
             <div class="tab-pane fade show active" id="login-pane">
               <form id="login-form" class="vstack gap-3" autocomplete="off">
-                <input class="form-control" type="email" name="email" placeholder="Email" autocomplete="off" required />
-                <input class="form-control" type="password" name="password" placeholder="Password" autocomplete="off" required />
+                <input type="text" name="fake_username" autocomplete="username" class="d-none" tabindex="-1" aria-hidden="true" />
+                <input type="password" name="fake_password" autocomplete="current-password" class="d-none" tabindex="-1" aria-hidden="true" />
+                <input class="form-control" type="email" name="login_email" placeholder="Email" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+                <input class="form-control" type="password" name="login_password" placeholder="Password" autocomplete="new-password" required />
                 <button class="btn btn-primary" type="submit">Login</button>
               </form>
             </div>
             <div class="tab-pane fade" id="register-pane">
               <form id="register-form" class="vstack gap-3" autocomplete="off">
+                <input type="text" name="fake_reg_username" autocomplete="username" class="d-none" tabindex="-1" aria-hidden="true" />
+                <input type="password" name="fake_reg_password" autocomplete="current-password" class="d-none" tabindex="-1" aria-hidden="true" />
                 <input class="form-control" type="text" name="fullName" placeholder="Full name" autocomplete="off" required />
-                <input class="form-control" type="email" name="email" placeholder="Email" autocomplete="off" required />
-                <input class="form-control" type="password" name="password" placeholder="Password" minlength="6" autocomplete="off" required />
+                <input class="form-control" type="email" name="register_email" placeholder="Email" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+                <input class="form-control" type="password" name="register_password" placeholder="Password" minlength="6" autocomplete="new-password" required />
                 <button class="btn btn-outline-primary" type="submit">Create account</button>
               </form>
             </div>
@@ -38,27 +42,52 @@ export async function renderLoginPage(container, { showToast, navigate }) {
   `;
 
   const loginForm = document.getElementById('login-form');
-  loginForm.reset();
+  const registerForm = document.getElementById('register-form');
+
+  function clearAuthForms() {
+    loginForm.reset();
+    registerForm.reset();
+
+    const loginEmail = loginForm.elements.login_email;
+    const loginPassword = loginForm.elements.login_password;
+    const registerEmail = registerForm.elements.register_email;
+    const registerPassword = registerForm.elements.register_password;
+
+    if (loginEmail) loginEmail.value = '';
+    if (loginPassword) loginPassword.value = '';
+    if (registerEmail) registerEmail.value = '';
+    if (registerPassword) registerPassword.value = '';
+  }
+
+  clearAuthForms();
+
+  const onPageShow = () => {
+    clearAuthForms();
+  };
+  if (window.__crmLoginPageShowHandler) {
+    window.removeEventListener('pageshow', window.__crmLoginPageShowHandler);
+  }
+  window.__crmLoginPageShowHandler = onPageShow;
+  window.addEventListener('pageshow', onPageShow);
+
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(loginForm);
 
     try {
-      await signIn(formData.get('email'), formData.get('password'));
+      await signIn(formData.get('login_email'), formData.get('login_password'));
       navigate('/dashboard');
     } catch (error) {
       showToast(error.message, 'danger');
     }
   });
 
-  const registerForm = document.getElementById('register-form');
-  registerForm.reset();
   registerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(registerForm);
 
     try {
-      await signUp(formData.get('email'), formData.get('password'), formData.get('fullName'));
+      await signUp(formData.get('register_email'), formData.get('register_password'), formData.get('fullName'));
       showToast('Registration created. You can now log in.');
       registerForm.reset();
     } catch (error) {
