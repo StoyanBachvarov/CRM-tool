@@ -1,6 +1,7 @@
 import { listCustomers } from '../../services/customersService';
 import { listSalesReps } from '../../services/salesRepsService';
 import { deleteVisit, listVisits, upsertVisit } from '../../services/visitsService';
+import { deleteEntityAttachment, listEntityAttachments, uploadEntityAttachment } from '../../services/attachmentsService';
 
 export async function renderVisitsPage(container, { showToast, user }) {
   const url = new URL(window.location.href);
@@ -55,6 +56,15 @@ export async function renderVisitsPage(container, { showToast, user }) {
               <div class="col-md-6"><label class="form-label">Outcome</label><input class="form-control" name="outcome" /></div>
               <div class="col-12"><label class="form-label">Description</label><input class="form-control" name="description" /></div>
               <div class="col-12"><label class="form-label">Notes</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
+              <div class="col-12">
+                <label class="form-label">Attachments</label>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                  <input class="form-control" type="file" id="visit-attachment-input" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" />
+                  <button type="button" class="btn btn-outline-secondary" id="visit-attachment-upload">Upload File</button>
+                </div>
+                <div class="form-text mb-2" id="visit-attachment-hint">Save visit first to enable file attachments.</div>
+                <ul class="list-group" id="visit-attachments-list"></ul>
+              </div>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
@@ -69,11 +79,16 @@ export async function renderVisitsPage(container, { showToast, user }) {
   const tbody = container.querySelector('#visits-table tbody');
   const customerFilter = document.getElementById('customer-filter');
   const form = document.getElementById('visit-form');
+  const visitAttachmentInput = document.getElementById('visit-attachment-input');
+  const visitAttachmentUploadBtn = document.getElementById('visit-attachment-upload');
+  const visitAttachmentHint = document.getElementById('visit-attachment-hint');
+  const visitAttachmentsList = document.getElementById('visit-attachments-list');
   const visitModal = new window.bootstrap.Modal(document.getElementById('visitModal'));
 
   let customers = [];
   let salesReps = [];
   let visits = [];
+  let currentVisitId = '';
 
   async function initialize() {
     customers = await listCustomers();
@@ -119,6 +134,8 @@ export async function renderVisitsPage(container, { showToast, user }) {
       button.addEventListener('click', () => {
         const visit = visits.find((v) => v.id === button.dataset.id);
         fillForm(visit);
+        currentVisitId = visit.id;
+        loadVisitAttachments();
         visitModal.show();
       });
     });
@@ -149,6 +166,47 @@ export async function renderVisitsPage(container, { showToast, user }) {
     form.elements.outcome.value = visit.outcome || '';
   }
 
+  function syncVisitAttachmentState() {
+    const hasVisit = Boolean(currentVisitId);
+    visitAttachmentInput.disabled = !hasVisit;
+    visitAttachmentUploadBtn.disabled = !hasVisit;
+    visitAttachmentHint.textContent = hasVisit
+      ? 'Upload screenshots or documents related to this visit.'
+      : 'Save visit first to enable file attachments.';
+  }
+
+  function renderVisitAttachments(attachments) {
+    if (!attachments.length) {
+      visitAttachmentsList.innerHTML = '<li class="list-group-item text-muted">No attachments yet.</li>';
+      return;
+    }
+
+    visitAttachmentsList.innerHTML = attachments
+      .map(
+        (attachment) => `
+          <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="text-truncate">
+              <a href="${attachment.downloadUrl}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${attachment.file_name}</a>
+              <div class="small text-muted">Uploaded ${new Date(attachment.created_at).toLocaleString()}</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger visit-attachment-delete" data-id="${attachment.id}" data-path="${attachment.storage_path}">Delete</button>
+          </li>
+        `
+      )
+      .join('');
+  }
+
+  async function loadVisitAttachments() {
+    syncVisitAttachmentState();
+    if (!currentVisitId) {
+      renderVisitAttachments([]);
+      return;
+    }
+
+    const attachments = await listEntityAttachments('visit', currentVisitId);
+    renderVisitAttachments(attachments);
+  }
+
   customerFilter.addEventListener('change', async () => {
     await loadVisits(customerFilter.value || undefined);
   });
@@ -156,10 +214,13 @@ export async function renderVisitsPage(container, { showToast, user }) {
   document.getElementById('add-visit-btn').addEventListener('click', () => {
     form.reset();
     form.elements.id.value = '';
+    currentVisitId = '';
     if (customerFilter.value) {
       form.elements.customer_id.value = customerFilter.value;
     }
     form.elements.sales_rep_id.value = user.id;
+    renderVisitAttachments([]);
+    syncVisitAttachmentState();
     visitModal.show();
   });
 
@@ -183,8 +244,66 @@ export async function renderVisitsPage(container, { showToast, user }) {
     }
   });
 
+  visitAttachmentUploadBtn.addEventListener('click', async () => {
+    if (!currentVisitId) {
+      showToast('Save visit first to upload files.', 'danger');
+      return;
+    }
+
+    const file = visitAttachmentInput.files?.[0];
+    if (!file) {
+      showToast('Select a file to upload.', 'danger');
+      return;
+    }
+
+    try {
+      await uploadEntityAttachment({
+        entityType: 'visit',
+        entityId: currentVisitId,
+        file,
+        ownerId: user.id
+      });
+      visitAttachmentInput.value = '';
+      await loadVisitAttachments();
+      showToast('Visit attachment uploaded');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  visitAttachmentsList.addEventListener('click', async (event) => {
+    const button = event.target.closest('.visit-attachment-delete');
+    if (!button) {
+      return;
+    }
+
+    if (!window.confirm('Delete this attachment?')) {
+      return;
+    }
+
+    try {
+      await deleteEntityAttachment({
+        attachmentId: button.dataset.id,
+        storagePath: button.dataset.path
+      });
+      await loadVisitAttachments();
+      showToast('Visit attachment deleted');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  document.getElementById('visitModal').addEventListener('hidden.bs.modal', () => {
+    currentVisitId = '';
+    visitAttachmentInput.value = '';
+    renderVisitAttachments([]);
+    syncVisitAttachmentState();
+  });
+
   try {
     await initialize();
+    syncVisitAttachmentState();
+    renderVisitAttachments([]);
   } catch (error) {
     showToast(error.message, 'danger');
   }

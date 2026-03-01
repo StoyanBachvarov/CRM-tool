@@ -3,8 +3,9 @@ import { listProjects } from '../../services/projectsService';
 import { listSalesReps } from '../../services/salesRepsService';
 import { deleteTask, listProjectStages, listTasksByProject, moveTask, upsertTask } from '../../services/tasksService';
 import { getProjectIdFromUrl } from '../../router';
+import { deleteEntityAttachment, listEntityAttachments, uploadEntityAttachment } from '../../services/attachmentsService';
 
-export async function renderTasksPage(container, { showToast }) {
+export async function renderTasksPage(container, { showToast, user }) {
   const preselectedProjectId = getProjectIdFromUrl();
 
   container.innerHTML = `
@@ -45,6 +46,15 @@ export async function renderTasksPage(container, { showToast }) {
                   <option value="completed">Completed</option>
                 </select>
               </div>
+              <div class="col-12">
+                <label class="form-label">Attachments</label>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                  <input class="form-control" type="file" id="task-attachment-input" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" />
+                  <button type="button" class="btn btn-outline-secondary" id="task-attachment-upload">Upload File</button>
+                </div>
+                <div class="form-text mb-2" id="task-attachment-hint">Save task first to enable file attachments.</div>
+                <ul class="list-group" id="task-attachments-list"></ul>
+              </div>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
@@ -59,12 +69,17 @@ export async function renderTasksPage(container, { showToast }) {
   const boardWrapper = document.getElementById('board-wrapper');
   const projectSelect = document.getElementById('project-select');
   const taskForm = document.getElementById('task-form');
+  const taskAttachmentInput = document.getElementById('task-attachment-input');
+  const taskAttachmentUploadBtn = document.getElementById('task-attachment-upload');
+  const taskAttachmentHint = document.getElementById('task-attachment-hint');
+  const taskAttachmentsList = document.getElementById('task-attachments-list');
   const taskModal = new window.bootstrap.Modal(document.getElementById('taskModal'));
 
   let projects = [];
   let stages = [];
   let tasks = [];
   let salesReps = [];
+  let currentTaskId = '';
 
   async function initialize() {
     projects = await listProjects();
@@ -133,9 +148,12 @@ export async function renderTasksPage(container, { showToast }) {
       button.addEventListener('click', () => {
         taskForm.reset();
         taskForm.elements.id.value = '';
+        currentTaskId = '';
         taskForm.elements.project_id.value = projectSelect.value;
         taskForm.elements.stage_id.value = button.dataset.stageId;
         taskForm.elements.status.value = stageNameToStatus(getStageName(button.dataset.stageId));
+        renderTaskAttachments([]);
+        syncTaskAttachmentState();
         taskModal.show();
       });
     });
@@ -144,6 +162,8 @@ export async function renderTasksPage(container, { showToast }) {
       button.addEventListener('click', () => {
         const task = tasks.find((item) => item.id === button.dataset.id);
         fillTaskForm(task);
+        currentTaskId = task.id;
+        loadTaskAttachments();
         taskModal.show();
       });
     });
@@ -240,6 +260,47 @@ export async function renderTasksPage(container, { showToast }) {
     taskForm.elements.status.value = task.status || 'open';
   }
 
+  function syncTaskAttachmentState() {
+    const hasTask = Boolean(currentTaskId);
+    taskAttachmentInput.disabled = !hasTask;
+    taskAttachmentUploadBtn.disabled = !hasTask;
+    taskAttachmentHint.textContent = hasTask
+      ? 'Upload screenshots or documents related to this task.'
+      : 'Save task first to enable file attachments.';
+  }
+
+  function renderTaskAttachments(attachments) {
+    if (!attachments.length) {
+      taskAttachmentsList.innerHTML = '<li class="list-group-item text-muted">No attachments yet.</li>';
+      return;
+    }
+
+    taskAttachmentsList.innerHTML = attachments
+      .map(
+        (attachment) => `
+          <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="text-truncate">
+              <a href="${attachment.downloadUrl}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${attachment.file_name}</a>
+              <div class="small text-muted">Uploaded ${new Date(attachment.created_at).toLocaleString()}</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger task-attachment-delete" data-id="${attachment.id}" data-path="${attachment.storage_path}">Delete</button>
+          </li>
+        `
+      )
+      .join('');
+  }
+
+  async function loadTaskAttachments() {
+    syncTaskAttachmentState();
+    if (!currentTaskId) {
+      renderTaskAttachments([]);
+      return;
+    }
+
+    const attachments = await listEntityAttachments('task', currentTaskId);
+    renderTaskAttachments(attachments);
+  }
+
   function getStageName(stageId) {
     return stages.find((stage) => stage.id === stageId)?.name || '';
   }
@@ -272,8 +333,66 @@ export async function renderTasksPage(container, { showToast }) {
     }
   });
 
+  taskAttachmentUploadBtn.addEventListener('click', async () => {
+    if (!currentTaskId) {
+      showToast('Save task first to upload files.', 'danger');
+      return;
+    }
+
+    const file = taskAttachmentInput.files?.[0];
+    if (!file) {
+      showToast('Select a file to upload.', 'danger');
+      return;
+    }
+
+    try {
+      await uploadEntityAttachment({
+        entityType: 'task',
+        entityId: currentTaskId,
+        file,
+        ownerId: user.id
+      });
+      taskAttachmentInput.value = '';
+      await loadTaskAttachments();
+      showToast('Task attachment uploaded');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  taskAttachmentsList.addEventListener('click', async (event) => {
+    const button = event.target.closest('.task-attachment-delete');
+    if (!button) {
+      return;
+    }
+
+    if (!window.confirm('Delete this attachment?')) {
+      return;
+    }
+
+    try {
+      await deleteEntityAttachment({
+        attachmentId: button.dataset.id,
+        storagePath: button.dataset.path
+      });
+      await loadTaskAttachments();
+      showToast('Task attachment deleted');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  document.getElementById('taskModal').addEventListener('hidden.bs.modal', () => {
+    currentTaskId = '';
+    taskAttachmentInput.value = '';
+    renderTaskAttachments([]);
+    syncTaskAttachmentState();
+  });
+
   try {
     await initialize();
+    syncTaskAttachmentState();
+    renderTaskAttachments([]);
   } catch (error) {
     showToast(error.message, 'danger');
   }
