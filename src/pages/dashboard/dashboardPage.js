@@ -11,11 +11,11 @@ export async function renderDashboardPage(container, { showToast }) {
       </div>
 
       <div class="row g-3">
-        ${renderCard('Customers', summary.customers, 'bi-people')}
-        ${renderCard('Projects', summary.projects, 'bi-kanban')}
-        ${renderCard('Open Tasks', summary.openTasks, 'bi-list-check')}
-        ${renderCard('Completed Tasks', summary.completedTasks, 'bi-check2-circle')}
-        ${renderCard('Upcoming Visits', summary.upcomingVisits, 'bi-calendar-event')}
+        ${renderCard('Customers', summary.customers, 'bi-people', '/customers')}
+        ${renderCard('Projects', summary.projects, 'bi-kanban', '/projects')}
+        ${renderCard('Open Tasks', summary.openTasks, 'bi-list-check', '/tasks')}
+        ${renderCard('Completed Tasks', summary.completedTasks, 'bi-check2-circle', '/tasks')}
+        ${renderCard('Upcoming Visits', summary.upcomingVisits, 'bi-calendar-event', '/visits')}
       </div>
     `;
   } catch (error) {
@@ -23,18 +23,20 @@ export async function renderDashboardPage(container, { showToast }) {
   }
 }
 
-function renderCard(label, value, icon) {
+function renderCard(label, value, icon, href) {
   return `
     <div class="col-sm-6 col-lg-4 col-xl-3">
-      <div class="card shadow-sm h-100">
-        <div class="card-body d-flex align-items-center gap-3">
-          <i class="bi ${icon} fs-2 text-primary"></i>
-          <div>
-            <h6 class="text-muted mb-1">${label}</h6>
-            <h3 class="mb-0">${value}</h3>
+      <a href="${href}" class="text-decoration-none text-reset d-block h-100">
+        <div class="card shadow-sm h-100">
+          <div class="card-body d-flex align-items-center gap-3">
+            <i class="bi ${icon} fs-2 text-primary"></i>
+            <div>
+              <h6 class="text-muted mb-1">${label}</h6>
+              <h3 class="mb-0">${value}</h3>
+            </div>
           </div>
         </div>
-      </div>
+      </a>
     </div>
   `;
 }

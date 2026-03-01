@@ -75,6 +75,10 @@ export async function renderTasksPage(container, { showToast }) {
       ...projects.map((project) => `<option value="${project.id}" ${project.id === preselectedProjectId ? 'selected' : ''}>${project.title}</option>`)
     ].join('');
 
+    if (!projectSelect.value && projects.length) {
+      projectSelect.value = projects[0].id;
+    }
+
     taskForm.elements.assigned_sales_rep_id.innerHTML = [
       '<option value="">Unassigned</option>',
       ...salesReps.map((rep) => `<option value="${rep.id}">${rep.full_name || rep.id}</option>`)

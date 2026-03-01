@@ -1,7 +1,11 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
-import 'bootstrap';
+import * as bootstrapLib from 'bootstrap';
 import './styles/main.css';
+
+if (!window.bootstrap) {
+  window.bootstrap = bootstrapLib;
+}
 
 import { renderLayout } from './components/layout/layout';
 import { showToast } from './components/common/toast';
