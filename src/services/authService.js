@@ -40,10 +40,6 @@ export async function signUp(email, password, fullName) {
     throw error;
   }
 
-  if (data.user) {
-    await ensureProfile(data.user.id, fullName || email);
-  }
-
   return data;
 }
 
@@ -64,31 +60,4 @@ export function onAuthStateChange(handler) {
     handler(session?.user || null);
   });
   return data.subscription;
-}
-
-export async function ensureProfile(userId, fullName) {
-  const client = requireSupabase();
-  const { data: existing, error: fetchError } = await client
-    .from('profiles')
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (fetchError) {
-    throw fetchError;
-  }
-
-  if (existing) {
-    return;
-  }
-
-  const { error } = await client.from('profiles').insert({
-    id: userId,
-    full_name: fullName,
-    role: 'sales_rep'
-  });
-
-  if (error) {
-    throw error;
-  }
 }
