@@ -1,6 +1,7 @@
 import { listCustomers } from '../../services/customersService';
 import { deleteProject, getProjectTaskStats, getStageCountByProject, listProjects, upsertProject } from '../../services/projectsService';
 import { getTasksUrlForProject } from '../../router';
+import { deleteEntityAttachment, listEntityAttachments, uploadEntityAttachment } from '../../services/attachmentsService';
 
 export async function renderProjectsPage(container, { showToast, user }) {
   const url = new URL(window.location.href);
@@ -58,6 +59,15 @@ export async function renderProjectsPage(container, { showToast, user }) {
               <div class="col-md-6"><label class="form-label">Customer</label><select class="form-select" name="customer_id" required></select></div>
               <div class="col-md-6"><label class="form-label">Title</label><input class="form-control" name="title" required /></div>
               <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="4"></textarea></div>
+              <div class="col-12">
+                <label class="form-label">Attachments</label>
+                <div class="d-flex gap-2 flex-wrap mb-2">
+                  <input class="form-control" type="file" id="project-attachment-input" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" />
+                  <button type="button" class="btn btn-outline-secondary" id="project-attachment-upload">Upload File</button>
+                </div>
+                <div class="form-text mb-2" id="project-attachment-hint">Save project first to enable file attachments.</div>
+                <ul class="list-group" id="project-attachments-list"></ul>
+              </div>
             </div>
             <div class="modal-footer">
               <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
@@ -72,10 +82,15 @@ export async function renderProjectsPage(container, { showToast, user }) {
   const tableBody = container.querySelector('#projects-table tbody');
   const customerFilter = document.getElementById('customer-filter');
   const form = document.getElementById('project-form');
+  const projectAttachmentInput = document.getElementById('project-attachment-input');
+  const projectAttachmentUploadBtn = document.getElementById('project-attachment-upload');
+  const projectAttachmentHint = document.getElementById('project-attachment-hint');
+  const projectAttachmentsList = document.getElementById('project-attachments-list');
   const projectModal = new window.bootstrap.Modal(document.getElementById('projectModal'));
 
   let customers = [];
   let projects = [];
+  let currentProjectId = '';
 
   async function initialize() {
     customers = await listCustomers();
@@ -129,6 +144,8 @@ export async function renderProjectsPage(container, { showToast, user }) {
       button.addEventListener('click', () => {
         const project = projects.find((item) => item.id === button.dataset.id);
         openProjectModal(project);
+        currentProjectId = project.id;
+        loadProjectAttachments();
         window.history.pushState({}, '', `/project/${button.dataset.id}/edit`);
       });
     });
@@ -158,13 +175,58 @@ export async function renderProjectsPage(container, { showToast, user }) {
   function openProjectModal(project) {
     form.reset();
     form.elements.id.value = '';
+    currentProjectId = '';
     if (customerFilter.value) {
       form.elements.customer_id.value = customerFilter.value;
     }
     if (project) {
       fillForm(project);
+      currentProjectId = project.id;
     }
+    renderProjectAttachments([]);
+    syncProjectAttachmentState();
     projectModal.show();
+  }
+
+  function syncProjectAttachmentState() {
+    const hasProject = Boolean(currentProjectId);
+    projectAttachmentInput.disabled = !hasProject;
+    projectAttachmentUploadBtn.disabled = !hasProject;
+    projectAttachmentHint.textContent = hasProject
+      ? 'Upload screenshots or documents related to this project.'
+      : 'Save project first to enable file attachments.';
+  }
+
+  function renderProjectAttachments(attachments) {
+    if (!attachments.length) {
+      projectAttachmentsList.innerHTML = '<li class="list-group-item text-muted">No attachments yet.</li>';
+      return;
+    }
+
+    projectAttachmentsList.innerHTML = attachments
+      .map(
+        (attachment) => `
+          <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="text-truncate">
+              <a href="${attachment.downloadUrl}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">${attachment.file_name}</a>
+              <div class="small text-muted">Uploaded ${new Date(attachment.created_at).toLocaleString()}</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger project-attachment-delete" data-id="${attachment.id}" data-path="${attachment.storage_path}">Delete</button>
+          </li>
+        `
+      )
+      .join('');
+  }
+
+  async function loadProjectAttachments() {
+    syncProjectAttachmentState();
+    if (!currentProjectId) {
+      renderProjectAttachments([]);
+      return;
+    }
+
+    const attachments = await listEntityAttachments('project', currentProjectId);
+    renderProjectAttachments(attachments);
   }
 
   document.getElementById('add-project-btn').addEventListener('click', () => {
@@ -173,6 +235,11 @@ export async function renderProjectsPage(container, { showToast, user }) {
   });
 
   document.getElementById('projectModal').addEventListener('hidden.bs.modal', () => {
+    currentProjectId = '';
+    projectAttachmentInput.value = '';
+    renderProjectAttachments([]);
+    syncProjectAttachmentState();
+
     const currentPath = window.location.pathname;
     if (currentPath === '/project/add' || /^\/project\/[^/]+\/edit\/?$/.test(currentPath)) {
       const basePath = selectedCustomerId ? `/customer/${selectedCustomerId}/projects` : '/projects';
@@ -195,9 +262,61 @@ export async function renderProjectsPage(container, { showToast, user }) {
 
     try {
       await upsertProject(payload);
+      if (payload.id) {
+        currentProjectId = payload.id;
+      }
       projectModal.hide();
       showToast(payload.id ? 'Project updated' : 'Project created');
       await loadProjects(customerFilter.value || undefined);
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  projectAttachmentUploadBtn.addEventListener('click', async () => {
+    if (!currentProjectId) {
+      showToast('Save project first to upload files.', 'danger');
+      return;
+    }
+
+    const file = projectAttachmentInput.files?.[0];
+    if (!file) {
+      showToast('Select a file to upload.', 'danger');
+      return;
+    }
+
+    try {
+      await uploadEntityAttachment({
+        entityType: 'project',
+        entityId: currentProjectId,
+        file,
+        ownerId: user.id
+      });
+      projectAttachmentInput.value = '';
+      await loadProjectAttachments();
+      showToast('Project attachment uploaded');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  projectAttachmentsList.addEventListener('click', async (event) => {
+    const button = event.target.closest('.project-attachment-delete');
+    if (!button) {
+      return;
+    }
+
+    if (!window.confirm('Delete this attachment?')) {
+      return;
+    }
+
+    try {
+      await deleteEntityAttachment({
+        attachmentId: button.dataset.id,
+        storagePath: button.dataset.path
+      });
+      await loadProjectAttachments();
+      showToast('Project attachment deleted');
     } catch (error) {
       showToast(error.message, 'danger');
     }
@@ -214,6 +333,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
       const project = projects.find((item) => item.id === editProjectId);
       if (project) {
         openProjectModal(project);
+        loadProjectAttachments();
       }
     }
   } catch (error) {
