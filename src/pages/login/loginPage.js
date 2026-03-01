@@ -17,17 +17,17 @@ export async function renderLoginPage(container, { showToast, navigate }) {
           </div>
           <div class="card-body tab-content">
             <div class="tab-pane fade show active" id="login-pane">
-              <form id="login-form" class="vstack gap-3">
-                <input class="form-control" type="email" name="email" placeholder="Email" required />
-                <input class="form-control" type="password" name="password" placeholder="Password" required />
+              <form id="login-form" class="vstack gap-3" autocomplete="off">
+                <input class="form-control" type="email" name="email" placeholder="Email" autocomplete="off" required />
+                <input class="form-control" type="password" name="password" placeholder="Password" autocomplete="off" required />
                 <button class="btn btn-primary" type="submit">Login</button>
               </form>
             </div>
             <div class="tab-pane fade" id="register-pane">
-              <form id="register-form" class="vstack gap-3">
-                <input class="form-control" type="text" name="fullName" placeholder="Full name" required />
-                <input class="form-control" type="email" name="email" placeholder="Email" required />
-                <input class="form-control" type="password" name="password" placeholder="Password" minlength="6" required />
+              <form id="register-form" class="vstack gap-3" autocomplete="off">
+                <input class="form-control" type="text" name="fullName" placeholder="Full name" autocomplete="off" required />
+                <input class="form-control" type="email" name="email" placeholder="Email" autocomplete="off" required />
+                <input class="form-control" type="password" name="password" placeholder="Password" minlength="6" autocomplete="off" required />
                 <button class="btn btn-outline-primary" type="submit">Create account</button>
               </form>
             </div>
@@ -38,6 +38,7 @@ export async function renderLoginPage(container, { showToast, navigate }) {
   `;
 
   const loginForm = document.getElementById('login-form');
+  loginForm.reset();
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(loginForm);
@@ -51,6 +52,7 @@ export async function renderLoginPage(container, { showToast, navigate }) {
   });
 
   const registerForm = document.getElementById('register-form');
+  registerForm.reset();
   registerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(registerForm);

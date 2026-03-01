@@ -9,7 +9,40 @@ if (!isSupabaseConfigured) {
   console.warn('Supabase environment variables are missing. Create .env from .env.example');
 }
 
-export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
+function clearPersistedAuthTokens() {
+  if (!supabaseUrl || typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
+    const keysToClear = [
+      `sb-${projectRef}-auth-token`,
+      `sb-${projectRef}-auth-token-code-verifier`
+    ];
+
+    keysToClear.forEach((key) => {
+      window.localStorage.removeItem(key);
+      window.sessionStorage.removeItem(key);
+    });
+  } catch {
+    // no-op
+  }
+}
+
+if (isSupabaseConfigured) {
+  clearPersistedAuthTokens();
+}
+
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    })
+  : null;
 
 export function requireSupabase() {
   if (!supabase) {
