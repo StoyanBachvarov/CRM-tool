@@ -85,10 +85,20 @@ export async function renderLoginPage(container, { showToast, navigate }) {
   registerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(registerForm);
+    const fullName = String(formData.get('fullName') || '').trim();
+    const email = String(formData.get('register_email') || '').trim();
+    const password = String(formData.get('register_password') || '');
 
     try {
-      await signUp(formData.get('register_email'), formData.get('register_password'), formData.get('fullName'));
-      showToast('Registration created. You can now log in.');
+      const result = await signUp(email, password, fullName);
+
+      if (result?.session) {
+        showToast('Registration successful. You are now logged in.');
+        navigate('/dashboard');
+        return;
+      }
+
+      showToast('Registration created. Check your email if confirmation is enabled, then log in.');
       registerForm.reset();
     } catch (error) {
       showToast(error.message, 'danger');
