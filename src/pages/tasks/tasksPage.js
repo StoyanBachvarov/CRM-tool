@@ -3,15 +3,20 @@ import { supabase } from '../../services/supabaseClient';
 import { listProjects } from '../../services/projectsService';
 import { listSalesReps } from '../../services/salesRepsService';
 import {
+  addTaskChecklistItem,
   addTaskComment,
   deleteTask,
+  deleteTaskChecklistItem,
   listLabelsForTask,
+  listTaskActivity,
+  listTaskChecklist,
   listProjectStages,
   listTaskComments,
   listTaskLabels,
   listTasksByProject,
   moveTask,
   replaceTaskLabels,
+  updateTaskChecklistItem,
   upsertTask
 } from '../../services/tasksService';
 import { getProjectIdFromUrl } from '../../router';
@@ -62,6 +67,10 @@ export async function renderTasksPage(container, { showToast, user }) {
                 </select>
               </div>
               <div class="col-md-6">
+                <label class="form-label">Due Date</label>
+                <input class="form-control" type="datetime-local" name="due_date" />
+              </div>
+              <div class="col-md-6">
                 <label class="form-label">Labels</label>
                 <div class="border rounded p-2" id="task-labels-box" style="max-height: 140px; overflow-y: auto;"></div>
               </div>
@@ -82,6 +91,19 @@ export async function renderTasksPage(container, { showToast, user }) {
                   <button type="button" class="btn btn-outline-primary" id="add-task-comment-btn">Add</button>
                 </div>
                 <div class="form-text" id="task-comments-hint">Save task first to add comments.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Checklist</label>
+                <div class="input-group mb-2">
+                  <input class="form-control" id="task-checklist-input" placeholder="Add checklist item..." />
+                  <button type="button" class="btn btn-outline-primary" id="add-task-checklist-btn">Add</button>
+                </div>
+                <ol class="list-group list-group-numbered" id="task-checklist-list"></ol>
+                <div class="form-text" id="task-checklist-hint">Save task first to manage checklist items.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Activity Log</label>
+                <div class="border rounded p-2" id="task-activity-list" style="max-height: 180px; overflow-y: auto;"></div>
               </div>
             </div>
             <div class="modal-footer">
@@ -106,6 +128,11 @@ export async function renderTasksPage(container, { showToast, user }) {
   const taskCommentInput = document.getElementById('task-comment-input');
   const addTaskCommentBtn = document.getElementById('add-task-comment-btn');
   const taskCommentsHint = document.getElementById('task-comments-hint');
+  const taskChecklistInput = document.getElementById('task-checklist-input');
+  const addTaskChecklistBtn = document.getElementById('add-task-checklist-btn');
+  const taskChecklistList = document.getElementById('task-checklist-list');
+  const taskChecklistHint = document.getElementById('task-checklist-hint');
+  const taskActivityList = document.getElementById('task-activity-list');
   const taskModal = new window.bootstrap.Modal(document.getElementById('taskModal'));
 
   let projects = [];
@@ -113,6 +140,7 @@ export async function renderTasksPage(container, { showToast, user }) {
   let tasks = [];
   let salesReps = [];
   let labels = [];
+  let checklistItems = [];
   let currentTaskId = '';
   let stageVisibleCounts = new Map();
   let tasksChannel = null;
@@ -241,6 +269,7 @@ export async function renderTasksPage(container, { showToast, user }) {
 
   function renderTaskCard(task) {
     const taskLabels = (task.task_label_assignments || []).map((item) => item.task_labels).filter(Boolean);
+    const deadline = getDeadlineBadge(task);
 
     return `
       <article class="task-card" data-task-id="${task.id}">
@@ -255,6 +284,7 @@ export async function renderTasksPage(container, { showToast, user }) {
           </div>
         </div>
         <p class="small text-muted mb-2">${task.description || '-'}</p>
+        ${deadline ? `<div class="mb-2">${deadline}</div>` : ''}
         <div class="d-flex flex-wrap gap-1 mb-2">
           ${taskLabels.map((label) => `<span class="badge text-bg-${label.color || 'secondary'}">${label.name}</span>`).join('')}
         </div>
@@ -342,6 +372,7 @@ export async function renderTasksPage(container, { showToast, user }) {
     taskForm.elements.title.value = task.title;
     taskForm.elements.description.value = task.description || '';
     taskForm.elements.status.value = task.status || 'open';
+    taskForm.elements.due_date.value = toDateTimeLocalValue(task.due_date);
   }
 
   function renderLabelOptions(selectedLabelIds) {
@@ -391,11 +422,78 @@ export async function renderTasksPage(container, { showToast, user }) {
       .join('');
   }
 
+  async function loadTaskChecklist() {
+    syncChecklistState();
+    if (!currentTaskId) {
+      checklistItems = [];
+      renderTaskChecklist();
+      return;
+    }
+
+    checklistItems = await listTaskChecklist(currentTaskId);
+    renderTaskChecklist();
+  }
+
+  function renderTaskChecklist() {
+    if (!checklistItems.length) {
+      taskChecklistList.innerHTML = '<li class="list-group-item text-muted">No checklist items yet.</li>';
+      return;
+    }
+
+    taskChecklistList.innerHTML = checklistItems
+      .map(
+        (item) => `
+          <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="form-check m-0">
+              <input class="form-check-input task-checklist-toggle" type="checkbox" data-id="${item.id}" ${item.is_done ? 'checked' : ''}>
+              <label class="form-check-label ${item.is_done ? 'text-decoration-line-through text-muted' : ''}">${escapeHtml(item.content)}</label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-danger task-checklist-delete" data-id="${item.id}">Delete</button>
+          </li>
+        `
+      )
+      .join('');
+  }
+
+  async function loadTaskActivity() {
+    if (!currentTaskId) {
+      taskActivityList.innerHTML = '<div class="text-muted small">No activity yet.</div>';
+      return;
+    }
+
+    const activity = await listTaskActivity(currentTaskId);
+    if (!activity.length) {
+      taskActivityList.innerHTML = '<div class="text-muted small">No activity yet.</div>';
+      return;
+    }
+
+    taskActivityList.innerHTML = activity
+      .map(
+        (entry) => `
+          <div class="border rounded p-2 mb-2">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="fw-semibold small">${escapeHtml(entry.message)}</div>
+              <span class="badge text-bg-light">${escapeHtml(entry.action_type)}</span>
+            </div>
+            <div class="small text-muted">${entry.profiles?.full_name || entry.actor_id || 'System'} - ${new Date(entry.created_at).toLocaleString()}</div>
+          </div>
+        `
+      )
+      .join('');
+  }
+
   function syncCommentsState() {
     const hasTask = Boolean(currentTaskId);
     taskCommentInput.disabled = !hasTask;
     addTaskCommentBtn.disabled = !hasTask;
     taskCommentsHint.textContent = hasTask ? 'Team discussion history for this task.' : 'Save task first to add comments.';
+  }
+
+  function syncChecklistState() {
+    const hasTask = Boolean(currentTaskId);
+    taskChecklistInput.disabled = !hasTask;
+    addTaskChecklistBtn.disabled = !hasTask;
+    taskChecklistHint.textContent = hasTask ? 'Use checklist to track structured workflow steps.' : 'Save task first to manage checklist items.';
   }
 
   function syncTaskAttachmentState() {
@@ -446,12 +544,18 @@ export async function renderTasksPage(container, { showToast, user }) {
     taskForm.elements.project_id.value = projectSelect.value;
     taskForm.elements.stage_id.value = stageId;
     taskForm.elements.status.value = stageNameToStatus(getStageName(stageId));
+    taskForm.elements.due_date.value = '';
     renderLabelOptions([]);
+    checklistItems = [];
+    renderTaskChecklist();
+    taskActivityList.innerHTML = '<div class="text-muted small">No activity yet.</div>';
     renderTaskAttachments([]);
     taskCommentsList.innerHTML = '<div class="text-muted small">No comments yet.</div>';
     taskCommentInput.value = '';
+    taskChecklistInput.value = '';
     syncTaskAttachmentState();
     syncCommentsState();
+    syncChecklistState();
     taskModal.show();
   }
 
@@ -464,10 +568,11 @@ export async function renderTasksPage(container, { showToast, user }) {
     fillTaskForm(task);
     currentTaskId = task.id;
     taskCommentInput.value = '';
+    taskChecklistInput.value = '';
 
     const selectedLabels = await listLabelsForTask(task.id);
     renderLabelOptions(selectedLabels);
-    await Promise.all([loadTaskAttachments(), loadTaskComments()]);
+    await Promise.all([loadTaskAttachments(), loadTaskComments(), loadTaskChecklist(), loadTaskActivity()]);
     taskModal.show();
   }
 
@@ -520,6 +625,7 @@ export async function renderTasksPage(container, { showToast, user }) {
     event.preventDefault();
 
     const payload = Object.fromEntries(new FormData(taskForm).entries());
+    payload.due_date = payload.due_date || null;
     const selectedLabelIds = [...taskLabelsBox.querySelectorAll('.task-label-checkbox:checked')].map((checkbox) => checkbox.value);
 
     if (!payload.id) {
@@ -610,15 +716,76 @@ export async function renderTasksPage(container, { showToast, user }) {
     }
   });
 
+  addTaskChecklistBtn.addEventListener('click', async () => {
+    const content = taskChecklistInput.value.trim();
+    if (!currentTaskId) {
+      showToast('Save task first to manage checklist.', 'danger');
+      return;
+    }
+
+    if (!content) {
+      showToast('Checklist item cannot be empty.', 'danger');
+      return;
+    }
+
+    try {
+      await addTaskChecklistItem(currentTaskId, content, checklistItems.length + 1);
+      taskChecklistInput.value = '';
+      await Promise.all([loadTaskChecklist(), loadTaskActivity()]);
+      showToast('Checklist item added');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  taskChecklistList.addEventListener('change', async (event) => {
+    const toggle = event.target.closest('.task-checklist-toggle');
+    if (!toggle) {
+      return;
+    }
+
+    try {
+      await updateTaskChecklistItem(toggle.dataset.id, { is_done: toggle.checked });
+      await Promise.all([loadTaskChecklist(), loadTaskActivity()]);
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
+  taskChecklistList.addEventListener('click', async (event) => {
+    const deleteButton = event.target.closest('.task-checklist-delete');
+    if (!deleteButton) {
+      return;
+    }
+
+    if (!window.confirm('Delete this checklist item?')) {
+      return;
+    }
+
+    try {
+      await deleteTaskChecklistItem(deleteButton.dataset.id);
+      await Promise.all([loadTaskChecklist(), loadTaskActivity()]);
+      showToast('Checklist item deleted');
+    } catch (error) {
+      showToast(error.message, 'danger');
+    }
+  });
+
   document.getElementById('taskModal').addEventListener('hidden.bs.modal', () => {
     currentTaskId = '';
     taskAttachmentInput.value = '';
+    taskForm.elements.due_date.value = '';
     renderTaskAttachments([]);
     renderLabelOptions([]);
     taskCommentInput.value = '';
+    taskChecklistInput.value = '';
+    checklistItems = [];
+    renderTaskChecklist();
     taskCommentsList.innerHTML = '<div class="text-muted small">No comments yet.</div>';
+    taskActivityList.innerHTML = '<div class="text-muted small">No activity yet.</div>';
     syncTaskAttachmentState();
     syncCommentsState();
+    syncChecklistState();
   });
 
   window.addEventListener('beforeunload', () => {
@@ -632,8 +799,11 @@ export async function renderTasksPage(container, { showToast, user }) {
     }
     syncTaskAttachmentState();
     syncCommentsState();
+    syncChecklistState();
     renderTaskAttachments([]);
+    renderTaskChecklist();
     taskCommentsList.innerHTML = '<div class="text-muted small">No comments yet.</div>';
+    taskActivityList.innerHTML = '<div class="text-muted small">No activity yet.</div>';
   } catch (error) {
     showToast(error.message, 'danger');
   }
@@ -648,6 +818,51 @@ function stageNameToStatus(stageName) {
     return 'in_progress';
   }
   return 'open';
+}
+
+function toDateTimeLocalValue(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const pad = (num) => String(num).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function getDeadlineBadge(task) {
+  if (!task.due_date) {
+    return '';
+  }
+
+  const dueDate = new Date(task.due_date);
+  if (Number.isNaN(dueDate.getTime())) {
+    return '';
+  }
+
+  const now = new Date();
+  const diffMs = dueDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (task.status !== 'completed' && diffDays < 0) {
+    return `<span class="badge text-bg-danger">Overdue: ${dueDate.toLocaleDateString()}</span>`;
+  }
+
+  if (task.status !== 'completed' && diffDays <= 3) {
+    return `<span class="badge text-bg-warning">Due soon: ${dueDate.toLocaleDateString()}</span>`;
+  }
+
+  return `<span class="badge text-bg-light">Due: ${dueDate.toLocaleDateString()}</span>`;
 }
 
 function escapeHtml(value) {

@@ -17,7 +17,7 @@ export async function listProjectStages(projectId) {
 export async function listTasksByProject(projectId) {
   const { data, error } = await supabase
     .from('tasks')
-    .select('id, project_id, stage_id, title, description, assigned_sales_rep_id, status, position, created_at, profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
+    .select('id, project_id, stage_id, title, description, assigned_sales_rep_id, status, due_date, position, created_at, profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
     .eq('project_id', projectId)
     .order('position', { ascending: true });
 
@@ -29,15 +29,20 @@ export async function listTasksByProject(projectId) {
 }
 
 export async function upsertTask(payload) {
+  const normalizedPayload = {
+    ...payload,
+    due_date: payload.due_date || null
+  };
+
   if (payload.id) {
-    const { error } = await supabase.from('tasks').update(payload).eq('id', payload.id);
+    const { error } = await supabase.from('tasks').update(normalizedPayload).eq('id', payload.id);
     if (error) {
       throw error;
     }
     return payload.id;
   }
 
-  const { data, error } = await supabase.from('tasks').insert(payload).select('id').single();
+  const { data, error } = await supabase.from('tasks').insert(normalizedPayload).select('id').single();
   if (error) {
     throw error;
   }
@@ -185,13 +190,87 @@ export async function listTasksByLabel(labelId) {
   const { data, error } = labelId
     ? await supabase
         .from('tasks')
-        .select('id, title, description, status, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments!inner(label_id, task_labels(id, name, color))')
+      .select('id, title, description, status, due_date, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments!inner(label_id, task_labels(id, name, color))')
         .eq('task_label_assignments.label_id', labelId)
         .order('created_at', { ascending: false })
     : await supabase
         .from('tasks')
-        .select('id, title, description, status, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
+      .select('id, title, description, status, due_date, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
         .order('created_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function listTasksByDeadline() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, title, description, status, due_date, project_id, stage_id, assigned_sales_rep_id, created_at, customer_projects(title), project_stages(name), profiles(full_name), task_label_assignments(label_id, task_labels(id, name, color))')
+    .not('due_date', 'is', null)
+    .order('due_date', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function listTaskChecklist(taskId) {
+  const { data, error } = await supabase
+    .from('task_checklist_items')
+    .select('id, task_id, content, position, is_done, created_at, updated_at')
+    .eq('task_id', taskId)
+    .order('position', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function addTaskChecklistItem(taskId, content, position) {
+  const { error } = await supabase.from('task_checklist_items').insert({
+    task_id: taskId,
+    content,
+    position,
+    is_done: false
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function updateTaskChecklistItem(itemId, payload) {
+  const { error } = await supabase
+    .from('task_checklist_items')
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq('id', itemId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteTaskChecklistItem(itemId) {
+  const { error } = await supabase.from('task_checklist_items').delete().eq('id', itemId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function listTaskActivity(taskId) {
+  const { data, error } = await supabase
+    .from('task_activity_logs')
+    .select('id, task_id, project_id, actor_id, action_type, message, details, created_at, profiles(full_name)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: false });
 
   if (error) {
     throw error;

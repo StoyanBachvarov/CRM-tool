@@ -29,6 +29,7 @@ import { renderSalesRepsPage } from './pages/sales-reps/salesRepsPage';
 import { renderVisitsPage } from './pages/visits/visitsPage';
 import { renderProjectsPage } from './pages/projects/projectsPage';
 import { renderTasksPage } from './pages/tasks/tasksPage';
+import { renderTaskDeadlinesPage } from './pages/task-deadlines/taskDeadlinesPage';
 import { renderTaskLabelsPage } from './pages/task-labels/taskLabelsPage';
 import { renderAdminPage } from './pages/admin/adminPage';
 
@@ -44,6 +45,7 @@ const pageMap = {
   visits: { render: renderVisitsPage, protected: true },
   projects: { render: renderProjectsPage, protected: true },
   tasks: { render: renderTasksPage, protected: true },
+  'task-deadlines': { render: renderTaskDeadlinesPage, protected: true },
   'task-labels': { render: renderTaskLabelsPage, protected: true },
   admin: { render: renderAdminPage, protected: true }
 };

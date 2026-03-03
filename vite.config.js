@@ -18,6 +18,7 @@ function rewritePrettyUrl(urlValue) {
     '/visits': '/visits.html',
     '/projects': '/projects.html',
     '/tasks': '/tasks.html',
+    '/task-deadlines': '/task-deadlines.html',
     '/task-labels': '/task-labels.html',
     '/admin': '/admin.html'
   };
@@ -115,6 +116,7 @@ export default defineConfig({
         visits: resolve(__dirname, 'visits.html'),
         projects: resolve(__dirname, 'projects.html'),
         tasks: resolve(__dirname, 'tasks.html'),
+        taskDeadlines: resolve(__dirname, 'task-deadlines.html'),
         taskLabels: resolve(__dirname, 'task-labels.html'),
         admin: resolve(__dirname, 'admin.html')
       }

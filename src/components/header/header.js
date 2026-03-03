@@ -5,6 +5,7 @@ const protectedLinks = [
   { href: '/visits', label: 'Visits', page: 'visits' },
   { href: '/projects', label: 'Projects', page: 'projects' },
   { href: '/tasks', label: 'Tasks', page: 'tasks' },
+  { href: '/task-deadlines', label: 'Deadlines', page: 'task-deadlines' },
   { href: '/task-labels', label: 'Task Labels', page: 'task-labels' }
 ];
 
