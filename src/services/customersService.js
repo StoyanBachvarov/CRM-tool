@@ -1,5 +1,21 @@
 import { supabase } from './supabaseClient';
 
+function normalizeCustomerPayload(payload) {
+  const normalizedPayload = { ...payload };
+
+  const uniqueNumber = normalizedPayload.unique_number?.trim?.();
+  const customerIdentifier = normalizedPayload.customer_id?.trim?.();
+
+  if (uniqueNumber) {
+    normalizedPayload.unique_number = uniqueNumber;
+    normalizedPayload.customer_id = uniqueNumber;
+  } else if (customerIdentifier) {
+    normalizedPayload.customer_id = customerIdentifier;
+  }
+
+  return normalizedPayload;
+}
+
 export async function listCustomers() {
   const { data, error } = await supabase
     .from('customers')
@@ -14,15 +30,17 @@ export async function listCustomers() {
 }
 
 export async function upsertCustomer(payload) {
+  const normalizedPayload = normalizeCustomerPayload(payload);
+
   if (payload.id) {
-    const { error } = await supabase.from('customers').update(payload).eq('id', payload.id);
+    const { error } = await supabase.from('customers').update(normalizedPayload).eq('id', payload.id);
     if (error) {
       throw error;
     }
     return;
   }
 
-  const { error } = await supabase.from('customers').insert(payload);
+  const { error } = await supabase.from('customers').insert(normalizedPayload);
   if (error) {
     throw error;
   }
