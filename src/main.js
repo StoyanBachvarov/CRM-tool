@@ -11,6 +11,7 @@ import { renderLayout } from './components/layout/layout';
 import { showToast } from './components/common/toast';
 import { getCurrentUser, onAuthStateChange, signOut } from './services/authService';
 import { getProfileById } from './services/profilesService';
+import { isSupabaseConfigured, supabaseConfigSource } from './services/supabaseClient';
 import {
   navigateTo,
   redirectToDashboard,
@@ -66,6 +67,14 @@ async function bootstrap() {
   }
 
   setPageTitle(pageId);
+
+  if (import.meta.env.PROD && !window.sessionStorage.getItem('crm_supabase_env_debug_shown')) {
+    const status = isSupabaseConfigured
+      ? `Supabase config source: ${supabaseConfigSource}`
+      : 'Supabase config missing (check Netlify env vars).';
+    showToast(status, isSupabaseConfigured ? 'info' : 'danger');
+    window.sessionStorage.setItem('crm_supabase_env_debug_shown', '1');
+  }
 
   if (isReloadNavigation()) {
     try {

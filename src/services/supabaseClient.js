@@ -1,7 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const hasViteSupabaseUrl = Boolean(import.meta.env.VITE_SUPABASE_URL);
+const hasViteSupabaseAnonKey = Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
+const hasFallbackSupabaseUrl = Boolean(__CRM_SUPABASE_URL__);
+const hasFallbackSupabaseAnonKey = Boolean(__CRM_SUPABASE_ANON_KEY__);
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || __CRM_SUPABASE_URL__;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || __CRM_SUPABASE_ANON_KEY__;
+
+export const supabaseConfigSource = hasViteSupabaseUrl && hasViteSupabaseAnonKey ? 'vite' : hasFallbackSupabaseUrl && hasFallbackSupabaseAnonKey ? 'fallback' : 'missing';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 

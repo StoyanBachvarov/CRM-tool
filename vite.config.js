@@ -104,6 +104,10 @@ function createPrettyUrlRewritePlugin() {
 }
 
 export default defineConfig({
+  define: {
+    __CRM_SUPABASE_URL__: JSON.stringify(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''),
+    __CRM_SUPABASE_ANON_KEY__: JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '')
+  },
   plugins: [createPrettyUrlRewritePlugin()],
   build: {
     rollupOptions: {
