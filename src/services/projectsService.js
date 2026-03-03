@@ -94,23 +94,25 @@ export async function upsertProject(payload) {
     return;
   }
 
-  const ownerId = await getAuthenticatedUserId();
-  const insertPayload = {
-    ...normalizedPayload,
-    owner_id: ownerId
-  };
+  await getAuthenticatedUserId();
+  const { data, error } = await supabase.rpc('create_customer_project', {
+    p_customer_id: normalizedPayload.customer_id,
+    p_title: normalizedPayload.title,
+    p_description: normalizedPayload.description || null
+  });
 
-  delete insertPayload.id;
-
-  const { data, error } = await supabase.from('customer_projects').insert(insertPayload).select('id').single();
   if (error) {
-    if (error.message?.toLowerCase().includes('row-level security')) {
+    const message = error.message?.toLowerCase() || '';
+    if (message.includes('not allowed to create project for this customer')) {
       throw new Error('Project creation is blocked by permissions. Make sure the selected customer belongs to your account and try again.');
+    }
+    if (message.includes('not authenticated')) {
+      throw new Error('Your session has expired. Please log in again.');
     }
     throw error;
   }
 
-  await createDefaultStages(data.id);
+  await createDefaultStages(data);
 }
 
 export async function getProjectById(projectId) {
