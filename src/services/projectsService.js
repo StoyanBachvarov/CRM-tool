@@ -1,5 +1,36 @@
 import { supabase } from './supabaseClient';
 
+async function getAuthenticatedUserId() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.user?.id) {
+    throw new Error('Your session has expired. Please log in again.');
+  }
+
+  return data.user.id;
+}
+
+function normalizeProjectPayload(payload) {
+  const normalizedPayload = { ...payload };
+
+  normalizedPayload.customer_id = String(normalizedPayload.customer_id || '').trim();
+  normalizedPayload.title = String(normalizedPayload.title || '').trim();
+  normalizedPayload.description = String(normalizedPayload.description || '').trim();
+
+  if (!normalizedPayload.customer_id) {
+    throw new Error('Please select a customer.');
+  }
+
+  if (!normalizedPayload.title) {
+    throw new Error('Project title is required.');
+  }
+
+  return normalizedPayload;
+}
+
 export async function listProjects(customerId) {
   let query = supabase
     .from('customer_projects')
@@ -49,16 +80,33 @@ export async function listProjectsPaged({ customerId, page = 1, pageSize = 20 } 
 }
 
 export async function upsertProject(payload) {
+  const normalizedPayload = normalizeProjectPayload(payload);
+
   if (payload.id) {
-    const { error } = await supabase.from('customer_projects').update(payload).eq('id', payload.id);
+    const updatePayload = { ...normalizedPayload };
+    delete updatePayload.id;
+    delete updatePayload.owner_id;
+
+    const { error } = await supabase.from('customer_projects').update(updatePayload).eq('id', payload.id);
     if (error) {
       throw error;
     }
     return;
   }
 
-  const { data, error } = await supabase.from('customer_projects').insert(payload).select('id').single();
+  const ownerId = await getAuthenticatedUserId();
+  const insertPayload = {
+    ...normalizedPayload,
+    owner_id: ownerId
+  };
+
+  delete insertPayload.id;
+
+  const { data, error } = await supabase.from('customer_projects').insert(insertPayload).select('id').single();
   if (error) {
+    if (error.message?.toLowerCase().includes('row-level security')) {
+      throw new Error('Project creation is blocked by permissions. Make sure the selected customer belongs to your account and try again.');
+    }
     throw error;
   }
 

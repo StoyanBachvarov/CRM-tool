@@ -587,7 +587,6 @@ export async function renderProjectsPage(container, { showToast, user }) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(form).entries());
 
-    payload.owner_id = user.id;
     if (!payload.id) {
       delete payload.id;
     }
@@ -621,8 +620,7 @@ export async function renderProjectsPage(container, { showToast, user }) {
       await uploadEntityAttachment({
         entityType: 'project',
         entityId: currentProjectId,
-        file,
-        ownerId: user.id
+        file
       });
       projectAttachmentInput.value = '';
       await loadProjectAttachments();

@@ -2,6 +2,19 @@ import { supabase } from './supabaseClient';
 
 const BUCKET = 'crm-attachments';
 
+async function getAuthenticatedUserId() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    throw error;
+  }
+
+  if (!data?.user?.id) {
+    throw new Error('Your session has expired. Please log in again.');
+  }
+
+  return data.user.id;
+}
+
 export async function listEntityAttachments(entityType, entityId) {
   const { data, error } = await supabase
     .from('attachments')
@@ -35,7 +48,8 @@ export async function listEntityAttachments(entityType, entityId) {
   return withUrls;
 }
 
-export async function uploadEntityAttachment({ entityType, entityId, file, ownerId }) {
+export async function uploadEntityAttachment({ entityType, entityId, file }) {
+  const ownerId = await getAuthenticatedUserId();
   const safeFileName = file.name.replace(/\s+/g, '_');
   const uniquePart = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const storagePath = `${entityType}/${entityId}/${uniquePart}_${safeFileName}`;
